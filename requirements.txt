@@ -2,3 +2,10 @@ streamlit
 plotly
 numpy
 pandas
+joblib
+scipy
+scikit-learn
+PyGithub
+PyEMD
+gspread
+oauth2client
