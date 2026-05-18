@@ -1,0 +1,41 @@
+{
+  "date": "2026-05-18T08:29:09.865770",
+  "modele": "SVM (RBF)",
+  "classes": [
+    "AIS 01",
+    "AIS 02"
+  ],
+  "n_features": 50,
+  "n_features_reduced": 5,
+  "n_observations": 181,
+  "fs_hz": 40000.0,
+  "fs_original": 80000.0,
+  "decim": 2,
+  "n_segments_loglog": 3,
+  "burst_smooth_ms": 1.0,
+  "burst_threshold_db": 8.0,
+  "burst_min_ms": 10.0,
+  "burst_merge_gap_ms": 2.0,
+  "max_bursts": 200,
+  "use_emd": true,
+  "use_wt": false,
+  "use_cmse": true,
+  "emd_subsample": 5000,
+  "emd_max_imf": 8,
+  "wt_wavelet": "db4",
+  "use_rfecv": true,
+  "taus_range": [
+    1e-05,
+    0.1
+  ],
+  "n_taus": 40,
+  "feature_names": [
+    "AVAR_pente3",
+    "AVAR_amp3",
+    "HVAR_amp3",
+    "PVAR_pente3",
+    "PVAR_amp3"
+  ],
+  "has_gmm": true,
+  "f1_macro": 1.0
+}

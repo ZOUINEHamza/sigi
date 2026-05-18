@@ -1,0 +1,24 @@
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+*$py.class
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Virtual environments
+venv/
+env/
+.env/
+
+# SigNoise Data (Large binary files)
+# Note: On Streamlit Cloud, you might want to keep these if they are small enough (<100MB)
+# otherwise use Git LFS or external storage.
+# *.pkl
+# *.iq
+# *.bin
+
+# Secrets
+credentials.json
+.streamlit/secrets.toml
