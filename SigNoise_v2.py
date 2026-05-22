@@ -2143,54 +2143,149 @@ class IdentificationTab(QWidget):
             return
         try:
             res = self._last_result
-            p = self.get_params()
-            fs = p["fs"]
-            if "f_psd" not in res and res.get("first_seg") is not None:
-                seg = res["first_seg"]
-                phase_brute = iq_to_phase(seg)
-                taus = np.logspace(np.log10(10e-6), np.log10(100e-3), 40)
-                use_cmse = p.get("use_cmse", True)
-                phase_emd = apply_emd(phase_brute, max_imf=p["emd_imf"], subsample=p["emd_sub"], use_cmse=use_cmse) if p["use_emd"] else phase_brute.copy()
-                phase_purif = apply_wavelet_denoise(phase_emd, wavelet=p["wt_wav"]) if p["use_wt"] else phase_emd.copy()
-                f_psd, Pxx = welch(seg, fs=fs, nperseg=min(1024, len(seg)//2), return_onesided=False)
-                Pdb = 10*np.log10(np.abs(Pxx)+1e-20)
-                avar = compute_avar(phase_purif, taus, fs)
-                res["f_psd"], res["Pdb"], res["taus"], res["avar"] = f_psd, Pdb, taus, avar
-            id_tr = f"ID_{Path(self._last_path).stem}"
+            p   = self.get_params()
+            fs  = p["fs"]
+            taus = np.logspace(np.log10(10e-6), np.log10(100e-3), 40)
+
+            id_tr  = f"ID_{Path(self._last_path).stem}"
             dossier = Path(__file__).parent / "archives"
             dossier.mkdir(exist_ok=True)
-            def clean(val): return val.tolist() if hasattr(val, "tolist") else val
-            
-            # Calcul des métriques
+
+            def clean(val):
+                return val.tolist() if hasattr(val, "tolist") else val
+
+            # Métriques globales
             n_tot = res.get("n_total", 0)
             n_inc = res.get("n_inconnus_total", 0)
             n_con = n_tot - n_inc
 
+            # ── Calcul par burst ─────────────────────────────────────────────
+            bursts_data = []
+            iq_bursts = res.get("iq_bursts", [])  # liste des segments IQ numpy
+
+            for i, seg in enumerate(iq_bursts):
+                try:
+                    use_cmse    = p.get("use_cmse", True)
+                    phase_brute = iq_to_phase(seg)
+                    phase_emd   = apply_emd(
+                        phase_brute,
+                        max_imf   = p["emd_imf"],
+                        subsample = p["emd_sub"],
+                        use_cmse  = use_cmse
+                    ) if p["use_emd"] else phase_brute.copy()
+                    phase_purif = apply_wavelet_denoise(
+                        phase_emd, wavelet=p["wt_wav"]
+                    ) if p["use_wt"] else phase_emd.copy()
+
+                    # Aligner longueurs
+                    N = len(phase_brute)
+                    if len(phase_purif) > N:
+                        phase_purif = phase_purif[:N]
+                    elif len(phase_purif) < N:
+                        phase_purif = np.pad(phase_purif, (0, N - len(phase_purif)))
+
+                    # Variances
+                    v_avar = compute_avar(phase_purif, taus, fs)
+                    v_hvar = compute_hvar(phase_purif, taus, fs)
+                    v_pvar = compute_pvar(phase_purif, taus, fs)
+
+                    # PSD
+                    f_psd, Pxx = welch(
+                        seg, fs=fs,
+                        nperseg=min(1024, len(seg) // 2),
+                        return_onesided=False
+                    )
+                    Pdb = 10 * np.log10(np.abs(Pxx) + 1e-20)
+
+                    # Fréquence instantanée
+                    freq_inst = np.diff(iq_to_phase(seg)) * fs / (2 * np.pi) / fs
+                    freq_inst = np.append(freq_inst, freq_inst[-1])
+
+                    # Features complètes
+                    try:
+                        fv, dom, _, _ = full_feature_vector(
+                            seg, taus, fs, p["nseg"],
+                            use_emd       = p["use_emd"],
+                            use_wt        = p["use_wt"],
+                            use_cmse      = use_cmse,
+                            emd_subsample = p["emd_sub"],
+                            emd_max_imf   = p["emd_imf"],
+                            wt_wavelet    = p["wt_wav"],
+                        )
+                        fn_list = feature_names(p["nseg"])
+                    except Exception:
+                        fv      = np.zeros(10)
+                        dom     = "N/A"
+                        fn_list = ["N/A"] * 10
+
+                    t_ms = (np.arange(N) / fs * 1000).tolist()
+                    t_fi = (np.arange(len(freq_inst)) / fs * 1000).tolist()
+
+                    bursts_data.append({
+                        "burst_index":  i,
+                        "label":        res.get("labels_per_burst", [])[i] if i < len(res.get("labels_per_burst", [])) else "N/A",
+                        "proba":        round(float(res.get("probas_per_burst", [])[i]) * 100, 1) if i < len(res.get("probas_per_burst", [])) else 0.0,
+                        "t_ms":         t_ms,
+                        "phase_brute":  clean(phase_brute),
+                        "phase_emd":    clean(phase_emd),
+                        "taus":         clean(taus),
+                        "avar":         clean(v_avar),
+                        "hvar":         clean(v_hvar),
+                        "pvar":         clean(v_pvar),
+                        "f_psd":        clean(np.fft.fftshift(f_psd)),
+                        "psd":          clean(np.fft.fftshift(Pdb)),
+                        "t_fi":         t_fi,
+                        "freq_inst":    clean(freq_inst),
+                        "feat_names":   fn_list,
+                        "features":     clean(fv),
+                        "dom":          dom,
+                    })
+
+                except Exception as e:
+                    bursts_data.append({
+                        "burst_index": i,
+                        "label":       "ERREUR",
+                        "proba":       0.0,
+                        "erreur":      str(e),
+                    })
+
+            # ── Rapport final ────────────────────────────────────────────────
             report = {
-                "id": id_tr, 
-                "date": datetime.datetime.now().strftime("%d/%m/%Y %H:%M"),
-                "decision": res.get("decision", "N/A"), 
+                "id":       id_tr,
+                "date":     datetime.datetime.now().strftime("%d/%m/%Y %H:%M"),
+                "decision": res.get("decision", "N/A"),
                 "confiance": f"{res.get('consensus', 0):.2f}%",
                 "metrics": {
-                    "n_connus": n_con,
+                    "n_connus":   n_con,
                     "n_inconnus": n_inc,
-                    "n_total": n_tot,
-                    "elapsed": round(res.get("elapsed", 0), 1)
+                    "n_total":    n_tot,
+                    "elapsed":    round(res.get("elapsed", 0), 1),
                 },
-                "distribution": res.get("emetteurs", {}),
+                "distribution":     res.get("emetteurs", {}),
                 "bursts": {
                     "labels": res.get("labels_per_burst", []),
-                    "probas": [round(float(p)*100, 1) for p in res.get("probas_per_burst", [])]
+                    "probas": [round(float(p) * 100, 1) for p in res.get("probas_per_burst", [])],
                 },
                 "groupes_inconnus": res.get("groupes_inconnus", {}),
-                "psd": {"f": clean(res.get("f_psd", [])), "p": clean(res.get("Pdb", []))},
-                "avar": {"x": clean(res.get("taus", [])), "y": clean(res.get("avar", []))}
+                # Données legacy (premier burst) pour compatibilité
+                "psd":  {"f": clean(res.get("f_psd", [])),  "p": clean(res.get("Pdb", []))},
+                "avar": {"x": clean(res.get("taus",  [])),  "y": clean(res.get("avar", []))},
+                # ── NOUVEAU : données complètes par burst ────────────────────
+                "bursts_data": bursts_data,
             }
-            save_path, _ = QFileDialog.getSaveFileName(self, "Exporter Rapport JSON COMPLET", str(dossier / f"{id_tr}.json"), "Fichiers JSON (*.json)")
+
+            save_path, _ = QFileDialog.getSaveFileName(
+                self, "Exporter Rapport JSON COMPLET",
+                str(dossier / f"{id_tr}.json"),
+                "Fichiers JSON (*.json)"
+            )
             if save_path:
-                with open(save_path, "w") as f: json.dump(report, f, indent=2)
-                QMessageBox.information(self, "Exportation", "Rapport JSON exporté avec succès.")
-        except Exception as e: QMessageBox.critical(self, "Erreur Export", f"Détails : {e}")
+                with open(save_path, "w") as f:
+                    json.dump(report, f, indent=2, default=convert_json)
+                QMessageBox.information(self, "Exportation", f"Rapport JSON exporté avec succès.\n{len(bursts_data)} burst(s) inclus.")
+
+        except Exception as e:
+            QMessageBox.critical(self, "Erreur Export", f"Détails : {e}")
 
     def _on_error(self, msg):
         self.btn_start.setEnabled(True); self.btn_abort.setEnabled(False)
