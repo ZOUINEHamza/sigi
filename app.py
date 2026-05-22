@@ -170,7 +170,7 @@ def identify_bursts(file_content, params):
 # --- CONFIGURATION DE LA PAGE ---
 
 BASE_DIR = Path(__file__).parent
-icon_path = BASE_DIR / "SigNoise_charge.svg"
+icon_path = BASE_DIR / "signoise_bleu.png"
 
 st.set_page_config(
     page_title="SigNoise Web Pro",
