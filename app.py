@@ -232,6 +232,71 @@ st.markdown(f"""
         margin-top: 20px;
         margin-bottom: 10px;
     }}
+    /* Icônes SVG dans les onglets via data-URI */
+    .stTabs [data-baseweb="tab"]:nth-child(1)::before {{
+        content: '';
+        display: inline-block;
+        width: 16px; height: 16px;
+        margin-right: 7px;
+        vertical-align: middle;
+        background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%235F5E5A' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M4.9 16.1C1 12.2 1 5.8 4.9 1.9'/%3E%3Cpath d='M7.8 4.7a6.14 6.14 0 0 0 0 8.5'/%3E%3Ccircle cx='12' cy='9' r='2'/%3E%3Cpath d='M16.2 4.7a6.14 6.14 0 0 1 0 8.5'/%3E%3Cpath d='M19.1 1.9a10.11 10.11 0 0 1 0 14.2'/%3E%3Cline x1='12' y1='11' x2='12' y2='22'/%3E%3Cline x1='8' y1='22' x2='16' y2='22'/%3E%3C/svg%3E");
+        background-repeat: no-repeat;
+        background-size: contain;
+    }}
+    .stTabs [data-baseweb="tab"]:nth-child(2)::before {{
+        content: '';
+        display: inline-block;
+        width: 16px; height: 16px;
+        margin-right: 7px;
+        vertical-align: middle;
+        background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%235F5E5A' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='22 12 18 12 15 21 9 3 6 12 2 12'/%3E%3C/svg%3E");
+        background-repeat: no-repeat;
+        background-size: contain;
+    }}
+    .stTabs [data-baseweb="tab"]:nth-child(3)::before {{
+        content: '';
+        display: inline-block;
+        width: 16px; height: 16px;
+        margin-right: 7px;
+        vertical-align: middle;
+        background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%235F5E5A' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cellipse cx='12' cy='5' rx='8' ry='3'/%3E%3Cpath d='M4 5v7c0 1.66 3.58 3 8 3s8-1.34 8-3V5'/%3E%3Cpath d='M4 12v5c0 1.66 3.58 3 8 3'/%3E%3Cpath d='M19 17v5'/%3E%3Cpath d='M22 20l-3-3-3 3'/%3E%3C/svg%3E");
+        background-repeat: no-repeat;
+        background-size: contain;
+    }}
+    .stTabs [data-baseweb="tab"]:nth-child(4)::before {{
+        content: '';
+        display: inline-block;
+        width: 16px; height: 16px;
+        margin-right: 7px;
+        vertical-align: middle;
+        background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%235F5E5A' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2'/%3E%3Ccircle cx='9' cy='7' r='4'/%3E%3Cpath d='M23 21v-2a4 4 0 0 0-3-3.87'/%3E%3Cpath d='M16 3.13a4 4 0 0 1 0 7.75'/%3E%3C/svg%3E");
+        background-repeat: no-repeat;
+        background-size: contain;
+    }}
+    .stTabs [data-baseweb="tab"]:nth-child(5)::before {{
+        content: '';
+        display: inline-block;
+        width: 16px; height: 16px;
+        margin-right: 7px;
+        vertical-align: middle;
+        background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%235F5E5A' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z'/%3E%3Ccircle cx='12' cy='12' r='3'/%3E%3C/svg%3E");
+        background-repeat: no-repeat;
+        background-size: contain;
+    }}
+    .stTabs [data-baseweb="tab"]:nth-child(6)::before {{
+        content: '';
+        display: inline-block;
+        width: 16px; height: 16px;
+        margin-right: 7px;
+        vertical-align: middle;
+        background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%235F5E5A' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Ccircle cx='12' cy='12' r='10'/%3E%3Cpath d='M12 16v-4'/%3E%3Cpath d='M12 8h.01'/%3E%3C/svg%3E");
+        background-repeat: no-repeat;
+        background-size: contain;
+    }}
+    /* Icône active en couleur marine */
+    .stTabs [aria-selected="true"]::before {{
+        filter: invert(10%) sepia(80%) saturate(800%) hue-rotate(200deg) brightness(50%);
+    }}
     </style>
     """, unsafe_allow_html=True)
 
@@ -287,12 +352,12 @@ tabs_config = [
 # Note: Streamlit ne supporte pas nativement les images dans st.tabs, 
 # on garde le texte mais on améliore le rendu via CSS ou colonnes si besoin.
 tab_id, tab_analysis, tab_train, tab_inc, tab_params, tab_about = st.tabs([
-    f"📡 {tabs_config[0]['label']}", 
-    f"📈 {tabs_config[1]['label']}", 
-    f"🧠 {tabs_config[2]['label']}", 
-    f"👥 {tabs_config[3]['label']}", 
-    f"⚙️ {tabs_config[4]['label']}", 
-    f"ℹ️ {tabs_config[5]['label']}"
+    "Identification",
+    "Analyse Signal",
+    "Entraînement",
+    "Inconnus",
+    "Paramètres",
+    "À Propos",
 ])
 
 # --- SIDEBAR ---
