@@ -346,6 +346,15 @@ def get_path(filename):
     path = BASE_DIR / filename
     return str(path) if path.exists() else None
 
+import base64
+def img_to_b64(path):
+    if not path or not os.path.exists(path): return ""
+    with open(path, "rb") as f: return base64.b64encode(f.read()).decode()
+
+if 'logo_ern_b64' not in st.session_state:
+    st.session_state.logo_ern_b64 = img_to_b64(get_path("ern.png"))
+if 'logo_en_b64' not in st.session_state:
+    st.session_state.logo_en_b64 = img_to_b64(get_path("en.png"))
 # --- HEADER (REPRODUCED FROM DESKTOP) ---
 st.markdown(f"""
     <div class="header-box">
