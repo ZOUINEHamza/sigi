@@ -998,6 +998,7 @@ class IdentificationWorker(QThread):
             labels, probas = [], []
             fvs_all   = []
             fvs_reduit= []
+            iq_segs   = []
             first_seg = None
             t0 = datetime.datetime.now()
 
@@ -1064,6 +1065,7 @@ class IdentificationWorker(QThread):
                 probas.append(pr)
                 fvs_all.append(fv)
                 fvs_reduit.append(fv_r)
+                iq_segs.append(seg)
 
                 elapsed = (datetime.datetime.now()-t0).total_seconds()
                 eta     = (elapsed/(i+1))*(n_total-i-1) if i>0 else 0
@@ -1094,6 +1096,7 @@ class IdentificationWorker(QThread):
             }
 
             self.finished_ok.emit({
+                "iq_bursts": iq_segs,
                 "decision":           decision,
                 "consensus":          n_votes/len(labels)*100,
                 "n_votes":            n_votes,
@@ -1111,6 +1114,7 @@ class IdentificationWorker(QThread):
                 "n_inconnus_total":   n_inconnus_total,
                 "groupes_inconnus":   {uid: {"n": d["n"], "statut": d.get("statut","EN_ATTENTE")}
                                        for uid, d in groupes_inconnus.items()},
+                                       
             })
         except Exception:
             self.error.emit(traceback.format_exc())
