@@ -1031,5 +1031,4 @@ Les hypothèses de travail ont été **validées expérimentalement** :
 
 # --- FOOTER ---
 st.markdown("---")
-st.markdown("<div class='footer'>SigNoise © 2026" \
-"EV2 ZOUINE Hamza </div>", unsafe_allow_html=True)
+st.markdown("<div class='footer' style='text-align:center;'>SigNoise © 2026 </div>", unsafe_allow_html=True)
