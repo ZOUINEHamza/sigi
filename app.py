@@ -421,27 +421,7 @@ with tab_id:
         if n_inconnus > 0 or inconnus:
             st.markdown("---")
             st.markdown(f"""
-            <div style="
-                background: linear-gradient(90deg, #2a1a4a 0%, #3b1f6e 100%);
-                border-radius: 10px;
-                padding: 16px 20px;
-                margin-bottom: 12px;
-                border-left: 4px solid {PAL['unknown']};
-                display: flex;
-                align-items: center;
-                gap: 12px;
-            ">
-                <span style="font-size:22px;">👁</span>
-                <div>
-                    <span style="color:white; font-weight:700; font-size:15px;">
-                        {n_inconnus} burst(s) classé(s) INCONNU
-                    </span><br>
-                    <span style="color:#b8a8d4; font-size:12px;">
-                        Émetteur(s) non reconnu(s) par le modèle — en attente de qualification
-                    </span>
-                </div>
-            </div>
-            """, unsafe_allow_html=True)
+            
 
             if INCONNUS_FILE.exists():
                 with open(INCONNUS_FILE, "r") as f:
