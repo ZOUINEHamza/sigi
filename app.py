@@ -876,32 +876,145 @@ with tab_params:
 
 
 with tab_about:
-    st.header("À Propos de SigNoise")
-    
-    col_a1, col_a2 = st.columns([2, 1])
-    
-    with col_a1:
-        st.markdown("""
-        ### Objectif
-        **SigNoise** est un système de **RF Fingerprinting** conçu pour identifier les navires via la signature unique de leurs émetteurs AIS. 
-        Contrairement à l'identification classique qui décode les messages, SigNoise analyse les imperfections physiques (bruit de phase) de l'oscillateur de l'émetteur.
-        
-        ### Pipeline Technique
-        1. **Détection** : Identification automatique des bursts AIS dans le flux IQ.
-        2. **Analyse** : Décomposition modale (EMD) et calcul de variances multi-échelles (Allan, Hadamard).
-        3. **IA** : Classification par Random Forest avec détection d'émetteurs inconnus (Open Set via GMM).
-        
-        **Projet de Fin d'Études (2025-2026)**
-        - **Élèves :** EV2 Hamza ZOUINE & EV2 Saad EL MAACHI
-        - **Encadrement :** École Navale / Institut de Recherche de l'École Navale (IRENav)
-        """)
-        
-    with col_a2:
-        qr_path = get_path("code_qr_rapport.png")
-        if qr_path:
-            st.image(qr_path, caption="Scanner pour lire le rapport complet", width=200)
-        st.info("Version Web Pro v1.0 (Cloud Edition)")
 
+    # --- EN-TÊTE ---
+    st.markdown(f"""
+    <div style="
+        background: linear-gradient(90deg, {PAL['marine']} 0%, #1C3464 100%);
+        border-radius: 10px; padding: 28px 32px; margin-bottom: 24px;
+    ">
+        <h2 style="color:white; margin:0; font-size:22px; letter-spacing:0.5px;">
+            SigNoise — RF Fingerprinting
+        </h2>
+        <p style="color:#9FB3D4; margin:6px 0 0 0; font-size:13px;">
+            Projet de Fin d'Études — École Royale Navale / IRENav — Année académique 2025–2026
+        </p>
+        <p style="color:{PAL['gold']}; margin:4px 0 0 0; font-size:12px; font-weight:600;">
+            EV2 Saad EL MAACHI &nbsp;·&nbsp; EV2 Hamza ZOUINE
+        </p>
+    </div>
+    """, unsafe_allow_html=True)
+
+    col_a1, col_a2 = st.columns([3, 2])
+
+    with col_a1:
+
+        # --- CONTEXTE ---
+        with st.container(border=True):
+            st.markdown(f'<p class="section-label">Contexte & Problématique</p>', unsafe_allow_html=True)
+            st.markdown("""
+En guerre électronique, la maîtrise du spectre électromagnétique et l'identification des acteurs présents dans une zone d'intérêt sont essentielles.
+Avec la prolifération des sources RF (radars, AIS, etc.), discriminer des émetteurs dans un environnement électriquement dense constitue un **verrou technologique majeur** pour les industriels de défense.
+
+L'identification classique repose sur le décodage des messages — une approche contournable par usurpation d'identité.
+**SigNoise** lève cette limite en exploitant les **imperfections physiques intrinsèques** de l'oscillateur de chaque émetteur : une empreinte unique, non falsifiable, indépendante du contenu du message.
+            """)
+
+        # --- PIPELINE ---
+        with st.container(border=True):
+            st.markdown(f'<p class="section-label">Pipeline de Traitement du Signal</p>', unsafe_allow_html=True)
+            st.markdown("""
+| Étape | Description |
+|---|---|
+| **1. Prétraitement** | Suppression DC offset, correction CFO, décimation FIR, normalisation puissance |
+| **2. Détection des bursts AIS** | Seuillage énergie lissée, filtrage durée minimale, fusion des gaps courts |
+| **3. Phase instantanée** | Transformation de Hilbert sur le signal IQ complexe |
+| **4. EMD** | Décomposition Modale Empirique en fonctions modales intrinsèques (IMFs) |
+| **5. CMSE** | Sélection adaptative des IMFs de bruit par seuil de contribution énergétique |
+| **6. Variances multi-échelles** | AVAR (Allan), HVAR (Hadamard), MHVAR — sensibles aux différents régimes de bruit |
+| **7. Vecteur signature** | DSP (Welch), fréquence instantanée, puissance, entropie de phase, indices EMD |
+            """)
+
+        # --- IA ---
+        with st.container(border=True):
+            st.markdown(f'<p class="section-label">Pipeline IA — Classification</p>', unsafe_allow_html=True)
+            col_ia1, col_ia2 = st.columns(2)
+            with col_ia1:
+                st.markdown("**Classification fermée**")
+                st.markdown("""
+- **RFECV** : sélection automatique des features les plus discriminantes
+- **Validation croisée 5-fold stratifiée** : comparaison SVM, Random Forest, Gradient Boosting, k-NN
+- **Random Forest 300 estimateurs** retenu comme meilleur classifieur
+                """)
+            with col_ia2:
+                st.markdown("**Classification ouverte (Open Set)**")
+                st.markdown("""
+- **Critère 1** : probabilité du classifieur ≥ seuil configurable (défaut 0.60)
+- **Critère 2** : log-vraisemblance GMM ≥ percentile 5 de calibration
+- Bursts hors critères → classés **INCONNU** et regroupés par distance euclidienne
+                """)
+
+    with col_a2:
+
+        # --- RÉSULTATS ---
+        with st.container(border=True):
+            st.markdown(f'<p class="section-label">Résultats & Validation</p>', unsafe_allow_html=True)
+            st.markdown("""
+Les hypothèses de travail ont été **validées expérimentalement** :
+
+✅ Le bruit interne contient une information discriminante — confirmé par les courbes DSP et les variances de stabilité
+
+✅ Les variances AVAR, HVAR, MHVAR permettent de construire des signatures séparables
+
+✅ La classification fermée valide la pertinence du vecteur signature pour l'identification supervisée
+
+✅ L'approche GMM introduit une capacité de rejet efficace pour la classification ouverte
+            """)
+
+        # --- MATÉRIEL ---
+        with st.container(border=True):
+            st.markdown(f'<p class="section-label">Dispositif Expérimental</p>', unsafe_allow_html=True)
+            st.markdown("""
+| Matériel | Détail |
+|---|---|
+| **Récepteur SDR** | NI USRP-2930 (EM200) |
+| **Enregistreur** | Rohde & Schwarz DWR100 |
+| **Émetteur AIS** | SAAB R5 SUPREME AIS |
+| **Fréquence centrale** | 161.975 / 162.025 MHz |
+| **Fréquence d'échantillonnage** | 800 kHz |
+| **Format fichier** | IQ float32 (complex64) |
+| **Logiciel acquisition** | R&S RAMON |
+            """)
+
+        # --- ENCADREMENT ---
+        with st.container(border=True):
+            st.markdown(f'<p class="section-label">Encadrement</p>', unsafe_allow_html=True)
+            st.markdown("""
+**Encadrants principaux**
+- M. Abdel-Ouahab BOUDRAA — Directeur Adjoint IRENav, Professeur École Navale
+- M. Jean-Jacques SZKOLNIK — Ingénieur de Recherche et Innovation, IRENav
+- Mme Assia BAKALI — Enseignante, École Royale Navale
+- Mme Asmaa MAALI — Enseignante, École Royale Navale
+- CF Yahya BENRAMDANE — Chef du Centre Opérationnel de Guerre Électronique, Marine Royale
+
+**Co-encadrante**
+- Mme Fatima EL ABBADI — Enseignante, École Royale Navale
+            """)
+
+        # --- RAPPORT ---
+        with st.container(border=True):
+            st.markdown(f'<p class="section-label">Rapport Complet</p>', unsafe_allow_html=True)
+            st.markdown("""
+Pour plus d'informations sur la méthodologie, les résultats et les bases théoriques :
+            """)
+            st.link_button(
+                "📄 Accéder au rapport complet",
+                "https://drive.google.com/file/d/1LwW_DU1MAIXDMeJ6eyOswKefYKBhqLDi/view?usp=drivesdk",
+                use_container_width=True
+            )
+            qr_path = get_path("code_qr_rapport.png")
+            if qr_path:
+                st.image(qr_path, caption="Scanner pour accéder au rapport", width=160)
+
+    # --- FOOTER VERSION ---
+    st.markdown("---")
+    st.markdown(f"""
+    <div style="text-align:center; color:{PAL['mid']}; font-size:12px;">
+        SigNoise Web Pro v1.0 — Cloud Edition &nbsp;·&nbsp;
+        École Royale Navale / IRENav &nbsp;·&nbsp;
+        Marine Royale Marocaine &nbsp;·&nbsp; 2025–2026
+    </div>
+    """, unsafe_allow_html=True)
 
 # --- FOOTER ---
 st.markdown("---")
