@@ -657,7 +657,7 @@ with tab_inc:
             if col_b1.button(" Valider le nom"):
                 st.success(f"L'émetteur {selected_uid} est maintenant identifié comme '{new_label}'.")
             
-            if col_b2.button(" Lancer Réentraînement Ciblé"):
+            if col_b2.button(" Lancer Réentraînement"):
                 n_caps = inc_db[selected_uid].get("n", 0)
                 if n_caps >= n_trigger:
                     st.success(f"Réentraînement lancé avec {n_caps} captures de {new_label} !")
