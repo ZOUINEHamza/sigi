@@ -360,8 +360,8 @@ st.markdown(f"""
     <div class="header-box">
         <div style="display: flex; justify-content: space-between; align-items: center;">
             <img src="data:image/png;base64,{st.session_state.get('logo_ern_b64', '')}" width="100">
-            <div style="text-align: center;">
-                <h1 style="margin: 0; font-size: 28px; letter-spacing: 1px; color: {PAL['marine']};">SigNoise </h1>
+            <div style="text-align: center; flex: 1;">
+                <h1 style="margin: 0; font-size: 28px; letter-spacing: 1px; color: {PAL['marine']};">SigNoise</h1>
                 <p style="margin: 5px 0 0 0; color: {PAL['mid']}; font-size: 14px; letter-spacing: 1px;">RF Fingerprinting</p>
             </div>
             <img src="data:image/png;base64,{st.session_state.get('logo_en_b64', '')}" width="100">
