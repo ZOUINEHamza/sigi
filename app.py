@@ -642,11 +642,11 @@ with tab_train:
 
     # 3. Bouton de réentraînement
     st.markdown("---")
-    if st.button("🧠 Lancer le réentraînement global"):
+    if st.button(" Lancer le réentraînement global"):
         st.warning("Réentraînement en cours ...")
 
 with tab_inc:
-    st.header("Émetteurs Inconnus (Open Set)")
+    st.header("Émetteurs Inconnus ")
 
     st.markdown('<p class="section-label">Configuration de l\'apprentissage continu</p>', unsafe_allow_html=True)
     n_trigger = st.number_input("Nombre de captures requis pour réentraîner automatiquement :", value=10, min_value=2)
@@ -693,7 +693,7 @@ with tab_inc:
 
             # --- SECTION ÉTIQUETAGE ---
             st.markdown("---")
-            st.subheader("Étiquetage & Qualification")
+            st.subheader("Étiquetage d'un groupe d'inconnus")
             col_sel, col_nom = st.columns(2)
 
             with col_sel:
@@ -719,7 +719,7 @@ with tab_inc:
                         st.success(f"'{selected_uid}' qualifié comme **'{new_label}'** et sauvegardé dans Firebase.")
                         st.rerun()
                     else:
-                        st.error("Échec de la sauvegarde Firebase.")
+                        st.error("Échec de la sauvegarde.")
                 else:
                     st.warning("Entrez un nom avant de valider.")
 
@@ -737,7 +737,7 @@ with tab_inc:
 
     # --- TABLEAU 2 : émetteurs qualifiés (Firebase) ---
     st.markdown("---")
-    st.markdown('<p class="section-label">Émetteurs qualifiés (base Firebase)</p>', unsafe_allow_html=True)
+    st.markdown('<p class="section-label">Émetteurs qualifiés </p>', unsafe_allow_html=True)
 
     etiquettes = firebase_get_etiquettes()
 
