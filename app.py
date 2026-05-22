@@ -615,7 +615,7 @@ with tab_train:
         st.warning("Réentraînement en cours sur le Cloud...")
 
 with tab_inc:
-    st.header("Émetteurs Inconnus (Open Set)")
+    st.header("Émetteurs Inconnus ")
 
     # Seuil de réentraînement automatique
     st.markdown('<p class="section-label">Configuration de l\'apprentissage continu</p>', unsafe_allow_html=True)
@@ -632,10 +632,10 @@ with tab_inc:
             for uid, info in inc_db.items():
                 data_inc.append({
                     "ID": uid,
+                    "Fichier source": info.get("fichier", info.get("source_file", "N/A")),
                     "Captures": info.get("n", 0),
                     "Statut": info.get("statut", "EN_ATTENTE"),
-                    "Première vue": info.get("date_premier", "N/A")[:10],
-                    "Dernière vue": info.get("date_dernier", "N/A")[:10]
+                    "Date de traitement": info.get("date_dernier", info.get("date_premier", "N/A"))[:10],
                 })
             
             st.table(pd.DataFrame(data_inc))
@@ -646,10 +646,10 @@ with tab_inc:
             new_label = st.text_input("Attribuer un nom définitif :", placeholder="Ex: AIS_NAVIRE_X")
             
             col_b1, col_b2 = st.columns(2)
-            if col_b1.button("✏️ Valider le nom"):
+            if col_b1.button(" Valider le nom"):
                 st.success(f"L'émetteur {selected_uid} est maintenant identifié comme '{new_label}'.")
             
-            if col_b2.button("♻️ Lancer Réentraînement Ciblé"):
+            if col_b2.button(" Lancer Réentraînement Ciblé"):
                 n_caps = inc_db[selected_uid].get("n", 0)
                 if n_caps >= n_trigger:
                     st.success(f"Réentraînement lancé avec {n_caps} captures de {new_label} !")
