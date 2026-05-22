@@ -843,7 +843,7 @@ with tab_id:
             selected_burst = st.selectbox("Analyser un burst spécifique :", df_bursts["Burst #"])
             if st.button(" Voir l'analyse détaillée"):
                 st.session_state.selected_burst_idx = selected_burst - 1
-                st.success(f"Burst {selected_burst} sélectionné. Allez dans l'onglet 'Analyse Signal'.")
+                st.success(f"Burst {selected_burst} sélectionné. Allez dans l'onglet 'Analyse Bruit'.")
 
 with tab_analysis:
     st.header("Analyse de Signature de Bruit")
@@ -1017,7 +1017,7 @@ with tab_analysis:
                     st.info("Features non disponibles.")
 
 with tab_train:
-    st.header("Gestion de d'entraînement")
+    st.header("Gestion d'entraînement")
     
     # 1. État du modèle actuel (chargé dynamiquement)
     st.markdown('<p class="section-label">Modèle Actuel</p>', unsafe_allow_html=True)
