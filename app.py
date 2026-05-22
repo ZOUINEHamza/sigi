@@ -655,7 +655,19 @@ with tab_inc:
             
             col_b1, col_b2 = st.columns(2)
             if col_b1.button(" Valider le nom"):
-                st.success(f"L'émetteur {selected_uid} est maintenant identifié comme '{new_label}'.")
+                if new_label.strip():
+                    db = charger_inconnus() if INCONNUS_FILE.exists() else {}
+                    if selected_uid in db:
+                        db[selected_uid]["etiquette_finale"] = new_label.strip()
+                        db[selected_uid]["statut"] = "NOMMÉ"
+                        with open(INCONNUS_FILE, "w") as f:
+                            json.dump(db, f, indent=2)
+                        st.success(f"✅ '{selected_uid}' renommé en '{new_label}'.")
+                        st.rerun()
+                    else:
+                        st.error("Inconnu introuvable dans la base.")
+                else:
+                    st.warning("Entrez un nom avant de valider.")
             
             if col_b2.button(" Lancer Réentraînement"):
                 n_caps = inc_db[selected_uid].get("n", 0)
