@@ -125,47 +125,7 @@ def _detect_bursts(iq, fs, smooth_ms=1.0, threshold_db=8.0, min_burst_ms=10.0, m
 
 # --- LOGIQUE IA & INFERENCE ---
 
-def identify_bursts(file_content, params):
-    fs = params.get("fs_original", 80000)
-    decim = params.get("decim", 2)
-    fs_eff = fs // decim
-    
-    # 1. Prétraitement
-    iq = _load_iq_full(file_content)
-    iq = _preprocess_iq(iq, fs, decim=decim)
-    
-    # 2. Détection
-    bursts_idx = _detect_bursts(iq, fs_eff, 
-                               smooth_ms=params.get("burst_smooth_ms", 1.0),
-                               threshold_db=params.get("burst_threshold_db", 8.0))
-    
-    if not bursts_idx:
-        return None
-    
-    # Limitation
-    max_b = params.get("max_bursts", 200)
-    if max_b:
-        bursts_idx = bursts_idx[:max_b]
-        
-    # 3. Extraction de features & Classification (Simulé ici, complet en Étape 3)
-    # Dans une version finale, on appellerait full_feature_vector pour chaque burst
-    results = {
-        "id": f"Traitement_{datetime.datetime.now().strftime('%H%M%S')}",
-        "metrics": {"n_connus": 0, "n_inconnus": 0, "n_total": len(bursts_idx), "elapsed": 0.5},
-        "distribution": {},
-        "bursts": {"labels": [], "probas": []},
-        "iq_bursts": [iq[s:e] for s, e in bursts_idx]
-    }
-    
-    # Simulation de résultats IA
-    for i in range(len(bursts_idx)):
-        results["bursts"]["labels"].append("AIS 01")
-        results["bursts"]["probas"].append(98.5)
-    
-    results["distribution"] = {"AIS 01": len(bursts_idx)}
-    results["metrics"]["n_connus"] = len(bursts_idx)
-    
-    return results
+
 
 # --- CONFIGURATION DE LA PAGE ---
 
@@ -890,8 +850,10 @@ with tab_analysis:
 
     data = st.session_state.get("current_data")
 
-    if not data or "bursts_data" not in data:
+    if not data:
         st.info("💡 Sélectionnez d'abord un rapport dans l'onglet **Identification**.")
+    elif "bursts_data" not in data:
+        st.warning("⚠️ Ce rapport a été généré avec une ancienne version. Relancez l'identification pour voir l'analyse.")
     else:
         bursts_data = data["bursts_data"]
         idx = st.session_state.get("selected_burst_idx", 0)
