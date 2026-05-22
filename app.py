@@ -11,6 +11,10 @@ from scipy.signal import welch, find_peaks, decimate
 from scipy.stats import skew, kurtosis
 from sklearn.preprocessing import StandardScaler
 from sklearn.mixture import GaussianMixture
+import requests
+
+FIREBASE_URL = st.secrets["firebase"]["database_url"].rstrip("/")
+
 
 # --- CONFIGURATION DES CHEMINS ---
 BASE_DIR = Path(__file__).parent
@@ -20,7 +24,34 @@ GMM_PATH       = BASE_DIR / "gmm_db.pkl"
 INCONNUS_FILE  = BASE_DIR / "inconnus_db.json"
 SCALER_PATH    = BASE_DIR / "scaler.pkl"
 RFECV_PATH     = BASE_DIR / "rfecv.pkl"
+# fct de base firebase
+def firebase_get_etiquettes():
+    """Lit les étiquettes validées depuis Firebase."""
+    try:
+        r = requests.get(f"{FIREBASE_URL}/etiquettes.json", timeout=5)
+        data = r.json()
+        return data if data else {}
+    except Exception:
+        return {}
 
+def firebase_set_etiquette(uid, nouveau_nom, n_captures):
+    """Ajoute ou met à jour une étiquette dans Firebase."""
+    try:
+        payload = {
+            "nouveau_nom": nouveau_nom,
+            "ancien_id": uid,
+            "n_captures": n_captures,
+            "date_validation": datetime.datetime.now().strftime("%Y-%m-%d %H:%M"),
+        }
+        requests.put(
+            f"{FIREBASE_URL}/etiquettes/{uid}.json",
+            json=payload,
+            timeout=5
+        )
+        return True
+    except Exception as e:
+        st.error(f"Erreur Firebase : {e}")
+        return False
 # --- FONCTIONS DE TRAITEMENT DU SIGNAL ---
 
 def iq_to_phase(iq):
@@ -612,22 +643,24 @@ with tab_train:
     # 3. Bouton de réentraînement
     st.markdown("---")
     if st.button("🧠 Lancer le réentraînement global"):
-        st.warning("Réentraînement en cours sur le Cloud...")
+        st.warning("Réentraînement en cours ...")
 
 with tab_inc:
-    st.header("Émetteurs Inconnus ")
+    st.header("Émetteurs Inconnus (Open Set)")
 
-    # Seuil de réentraînement automatique
     st.markdown('<p class="section-label">Configuration de l\'apprentissage continu</p>', unsafe_allow_html=True)
     n_trigger = st.number_input("Nombre de captures requis pour réentraîner automatiquement :", value=10, min_value=2)
+
+    # --- TABLEAU 1 : inconnus bruts (JSON local) ---
+    st.markdown('<p class="section-label">Groupes d\'inconnus détectés</p>', unsafe_allow_html=True)
 
     if INCONNUS_FILE.exists():
         with open(INCONNUS_FILE, "r") as f:
             inc_db = json.load(f)
-        
+
         if inc_db:
             st.write(f"Nombre de groupes d'inconnus détectés : `{len(inc_db)}`")
-            
+
             data_inc = []
             for uid, info in inc_db.items():
                 sources = info.get("fichiers_sources", [])
@@ -639,46 +672,97 @@ with tab_inc:
                     fichier_affiche = "  |  ".join(Path(f).name for f in sources)
 
                 data_inc.append({
-                    "ID": uid,
-                    "Fichier source": fichier_affiche,
-                    "Captures": info.get("n", 0),
-                    "Statut": info.get("statut", "EN_ATTENTE"),
-                    "Date": info.get("date_dernier", info.get("date_premier", "N/A"))[:10],
+                    "ID Groupe":        uid,
+                    "Fichier source":   fichier_affiche,
+                    "Captures":         info.get("n", 0),
+                    "Statut":           info.get("statut", "EN_ATTENTE"),
+                    "Date":             info.get("date_dernier", info.get("date_premier", "N/A"))[:10],
                 })
 
-            st.table(pd.DataFrame(data_inc))
-            
+            st.dataframe(
+                pd.DataFrame(data_inc),
+                hide_index=True,
+                height=min(150 + 35 * len(data_inc), 300),
+                column_config={
+                    "Captures": st.column_config.ProgressColumn(
+                        "Captures", min_value=0, max_value=20, format="%d",
+                    ),
+                },
+                width="stretch"
+            )
+
+            # --- SECTION ÉTIQUETAGE ---
             st.markdown("---")
-            st.subheader("Étiquetage & Intégration")
-            selected_uid = st.selectbox("Sélectionner un inconnu pour qualification :", list(inc_db.keys()))
-            new_label = st.text_input("Attribuer un nom définitif :", placeholder="Ex: AIS_NAVIRE_X")
-            
+            st.subheader("Étiquetage & Qualification")
+            col_sel, col_nom = st.columns(2)
+
+            with col_sel:
+                selected_uid = st.selectbox(
+                    "Sélectionner un inconnu :",
+                    list(inc_db.keys()),
+                    key="sel_uid_inc"
+                )
+            with col_nom:
+                new_label = st.text_input(
+                    "Nouveau nom définitif :",
+                    placeholder="Ex: AIS_NAVIRE_X",
+                    key="new_label_inc"
+                )
+
             col_b1, col_b2 = st.columns(2)
+
             if col_b1.button(" Valider le nom"):
                 if new_label.strip():
-                    db = charger_inconnus() if INCONNUS_FILE.exists() else {}
-                    if selected_uid in db:
-                        db[selected_uid]["etiquette_finale"] = new_label.strip()
-                        db[selected_uid]["statut"] = "NOMMÉ"
-                        with open(INCONNUS_FILE, "w") as f:
-                            json.dump(db, f, indent=2)
-                        st.success(f"✅ '{selected_uid}' renommé en '{new_label}'.")
+                    n_cap = inc_db.get(selected_uid, {}).get("n", 0)
+                    ok = firebase_set_etiquette(selected_uid, new_label.strip(), n_cap)
+                    if ok:
+                        st.success(f"'{selected_uid}' qualifié comme **'{new_label}'** et sauvegardé dans Firebase.")
                         st.rerun()
                     else:
-                        st.error("Inconnu introuvable dans la base.")
+                        st.error("Échec de la sauvegarde Firebase.")
                 else:
                     st.warning("Entrez un nom avant de valider.")
-            
-            if col_b2.button(" Lancer Réentraînement"):
-                n_caps = inc_db[selected_uid].get("n", 0)
+
+            if col_b2.button("Lancer Réentraînement "):
+                n_caps = inc_db.get(selected_uid, {}).get("n", 0)
                 if n_caps >= n_trigger:
-                    st.success(f"Réentraînement lancé avec {n_caps} captures de {new_label} !")
+                    st.success(f"Réentraînement lancé avec {n_caps} captures de '{selected_uid}' !")
                 else:
                     st.warning(f"Captures insuffisantes ({n_caps}/{n_trigger}).")
+
         else:
             st.info("Aucun émetteur inconnu détecté pour le moment.")
     else:
         st.info("La base des inconnus est vide.")
+
+    # --- TABLEAU 2 : émetteurs qualifiés (Firebase) ---
+    st.markdown("---")
+    st.markdown('<p class="section-label">Émetteurs qualifiés (base Firebase)</p>', unsafe_allow_html=True)
+
+    etiquettes = firebase_get_etiquettes()
+
+    if etiquettes:
+        data_etiq = []
+        for uid, info in etiquettes.items():
+            data_etiq.append({
+                "Ancien ID":        info.get("ancien_id", uid),
+                "Nouveau nom":      info.get("nouveau_nom", "—"),
+                "Captures":         info.get("n_captures", 0),
+                "Date validation":  info.get("date_validation", "—"),
+            })
+
+        st.markdown(f"**{len(etiquettes)} émetteur(s) qualifié(s) :**")
+        st.dataframe(
+            pd.DataFrame(data_etiq),
+            hide_index=True,
+            column_config={
+                "Nouveau nom": st.column_config.TextColumn("Nouveau nom 🏷️"),
+                "Captures": st.column_config.NumberColumn("Captures", format="%d"),
+            },
+            width="stretch"
+        )
+    else:
+        st.info(" Aucun émetteur qualifié pour l'instant. Utilisez le formulaire ci-dessus pour nommer un inconnu.")
 
 
 with tab_params:
@@ -697,7 +781,7 @@ with tab_params:
 
     with col_p2:
         with st.container(border=True):
-            st.markdown("**🎯 Détection AIS**")
+            st.markdown("** Détection AIS**")
             st.slider("Seuil de puissance (dB)", 1, 20, 8)
             st.slider("Durée minimale burst (ms)", 5, 50, 10)
             st.slider("Seuil Open-Set (GMM)", 0.1, 0.9, 0.6)
