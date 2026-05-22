@@ -628,14 +628,17 @@ with tab_inc:
         if inc_db:
             st.write(f"Nombre de groupes d'inconnus détectés : `{len(inc_db)}`")
             
-            data_inc.append({
-                    "ID Groupe":        uid,
-                    "Étiquette":        info.get("etiquette_finale", "—"),
-                    "Fichiers sources": fichier_affiche,
-                    "Captures":         info.get("n", 0),
-                    "Statut":           info.get("statut", "EN_ATTENTE"),
-                    "Date":             info.get("date_dernier", info.get("date_premier", "N/A"))[:10],
+            data_inc = []
+            for uid, info in inc_db.items():
+                data_inc.append({
+                    "ID": uid,
+                    "Fichier source": info.get("fichier", info.get("source_file", "N/A")),
+                    "Captures": info.get("n", 0),
+                    "Statut": info.get("statut", "EN_ATTENTE"),
+                    "Date de traitement": info.get("date_dernier", info.get("date_premier", "N/A"))[:10],
                 })
+            
+            st.table(pd.DataFrame(data_inc))
             
             st.markdown("---")
             st.subheader("Étiquetage & Intégration")
