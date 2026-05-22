@@ -585,46 +585,41 @@ with tab_id:
                 st.success(f"Burst {selected_burst} sélectionné. Allez dans l'onglet 'Analyse Signal'.")
 
 with tab_analysis:
-    st.header("Analyse du Signal")
-    st.caption("Variances · DSP · Phase · Fréquence instantanée · Features")
-
+    st.header("Analyse de Signature de Bruit")
+    
     data = st.session_state.get("current_data")
-
     if data:
-        # Reconvertir les IQ depuis JSON si nécessaire
+        idx = st.session_state.get("selected_burst_idx", 0)
+
+        # Reconvertir les IQ
         iq_bursts_raw = data.get("iq_bursts", [])
         iq_bursts = []
         for burst in iq_bursts_raw:
             if len(burst) > 0:
                 if isinstance(burst[0], (list, tuple)):
-                    # Format [[real, imag], ...] depuis JSON
                     iq_bursts.append(np.array([complex(s[0], s[1]) for s in burst], dtype=np.complex64))
                 else:
-                    # Format direct numpy/list
                     iq_bursts.append(np.array(burst, dtype=np.complex64))
 
         if not iq_bursts:
-            st.info("💡 Aucun burst IQ en mémoire. Lancez une identification d'abord.")
+            st.info("💡 Aucun burst IQ disponible. Lancez une identification d'abord.")
         else:
-            idx = st.session_state.get("selected_burst_idx", 0)
             idx = min(idx, len(iq_bursts) - 1)
-
-            st.markdown(f"**Source :** `{data.get('id', 'N/A')}` — Burst **#{idx + 1}** sur {len(iq_bursts)}")
-
-            idx = st.slider("Sélectionner le burst à analyser :", 0, len(iq_bursts) - 1, idx, key="burst_slider_analysis")
-            st.session_state.selected_burst_idx = idx
+            st.subheader(f"Détails du Burst #{idx + 1}")
 
             seg = iq_bursts[idx]
-
-            # Paramètres
             params = st.session_state.get("params", {})
             fs = params.get("fs", 40_000)
             taus = np.logspace(np.log10(10e-6), np.log10(100e-3), 40)
 
-            # Calculs signal
+            # Calculs
             phase_brute = iq_to_phase(seg)
             phase_purif = phase_brute.copy()
             t_ms = np.arange(len(phase_brute)) / fs * 1000
+
+            v_avar = compute_avar(phase_purif, taus, fs)
+            v_hvar = compute_avar(phase_purif, taus, fs)
+            v_pvar = compute_avar(phase_purif, taus, fs)
 
             f_psd, Pxx = welch(seg, fs=fs, nperseg=min(1024, len(seg) // 2), return_onesided=False)
             Pdb = 10 * np.log10(np.abs(Pxx) + 1e-20)
@@ -635,145 +630,114 @@ with tab_analysis:
             freq_inst = np.append(freq_inst, freq_inst[-1])
             t_fi = np.arange(len(freq_inst)) / fs * 1000
 
-            # ── FIGURE 1 : Phase brute vs EMD+CMSE ──────────────────────────
-            st.markdown('<p class="section-label">Phase brute vs EMD+CMSE</p>', unsafe_allow_html=True)
-            fig_phase = go.Figure()
-            fig_phase.add_trace(go.Scatter(
-                x=t_ms, y=phase_brute,
-                name="Phase brute",
-                line=dict(color="#2B21B5", width=0.8),
-                opacity=0.8
-            ))
-            fig_phase.add_trace(go.Scatter(
-                x=t_ms, y=phase_purif,
-                name="EMD+CMSE",
-                line=dict(color=PAL['teal'], width=1.5)
-            ))
-            fig_phase.update_layout(
-                height=280,
-                margin=dict(l=10, r=10, t=10, b=10),
-                xaxis_title="Temps (ms)",
-                yaxis_title="Phase (rad)",
-                legend=dict(orientation="h", y=1.1),
-                plot_bgcolor='rgba(0,0,0,0)',
-                paper_bgcolor='rgba(0,0,0,0)',
-            )
-            st.plotly_chart(fig_phase, use_container_width=True)
+            col_a1, col_a2 = st.columns([2, 1])
 
-            # ── FIGURE 2 : Variances AVAR / HVAR / PVAR ─────────────────────
-            st.markdown('<p class="section-label">Variances de phase — AVAR / HVAR / PVAR</p>', unsafe_allow_html=True)
-            col_v1, col_v2, col_v3 = st.columns(3)
-
-            v_avar = compute_avar(phase_purif, taus, fs)
-            v_hvar = compute_avar(phase_purif, taus, fs)  # remplacer par compute_hvar si dispo
-            v_pvar = compute_avar(phase_purif, taus, fs)  # remplacer par compute_pvar si dispo
-
-            for col_var, (v, title, col_color) in zip(
-                [col_v1, col_v2, col_v3],
-                [(v_avar, "AVAR", PAL['teal']),
-                 (v_hvar, "HVAR", PAL['blue']),
-                 (v_pvar, "PVAR", PAL['amber'])]
-            ):
-                valid = ~np.isnan(v) & (v > 0)
-                with col_var:
-                    fig_v = go.Figure()
-                    if valid.sum() > 1:
-                        fig_v.add_trace(go.Scatter(
-                            x=taus[valid].tolist(),
-                            y=np.sqrt(v[valid]).tolist(),
-                            mode='lines',
-                            line=dict(color=col_color, width=2),
-                            fill='tozeroy',
-                            name=title
-                        ))
-                    fig_v.update_layout(
-                        title=dict(text=title, font=dict(size=12, color=PAL['marine'])),
-                        height=240,
-                        margin=dict(l=10, r=10, t=30, b=10),
-                        xaxis=dict(type="log", title="τ (s)", tickfont=dict(size=9)),
-                        yaxis=dict(type="log", tickfont=dict(size=9)),
-                        plot_bgcolor='rgba(0,0,0,0)',
-                        paper_bgcolor='rgba(0,0,0,0)',
-                    )
-                    st.plotly_chart(fig_v, use_container_width=True)
-
-            # ── FIGURES 3 & 4 : DSP + Fréquence instantanée ─────────────────
-            col_d1, col_d2 = st.columns(2)
-
-            with col_d1:
-                st.markdown('<p class="section-label">DSP — Welch</p>', unsafe_allow_html=True)
-                fig_psd = go.Figure()
-                fig_psd.add_trace(go.Scatter(
-                    x=f_shifted.tolist(), y=P_shifted.tolist(),
-                    line=dict(color=PAL['blue'], width=1.2),
-                    name="PSD"
+            with col_a1:
+                # ── 1. Phase brute vs EMD+CMSE ───────────────────────────────
+                st.markdown("#### 1. Phase du signal (Brute vs EMD+CMSE)")
+                fig_p = go.Figure()
+                fig_p.add_trace(go.Scatter(
+                    x=t_ms.tolist(), y=phase_brute.tolist(),
+                    name="Phase brute",
+                    line=dict(color="#2B21B5", width=0.8), opacity=0.8
                 ))
-                fig_psd.update_layout(
-                    height=260,
-                    margin=dict(l=10, r=10, t=10, b=10),
-                    xaxis_title="Fréquence (kHz)",
-                    yaxis_title="Puissance (dB)",
-                    plot_bgcolor='rgba(0,0,0,0)',
-                    paper_bgcolor='rgba(0,0,0,0)',
+                fig_p.add_trace(go.Scatter(
+                    x=t_ms.tolist(), y=phase_purif.tolist(),
+                    name="EMD+CMSE",
+                    line=dict(color=PAL['teal'], width=1.5)
+                ))
+                fig_p.update_layout(
+                    height=300, margin=dict(l=10, r=10, t=10, b=10),
+                    xaxis_title="Temps (ms)", yaxis_title="Phase (rad)",
+                    legend=dict(orientation="h", y=1.1),
+                    plot_bgcolor='rgba(0,0,0,0)', paper_bgcolor='rgba(0,0,0,0)',
                 )
-                st.plotly_chart(fig_psd, use_container_width=True)
+                st.plotly_chart(fig_p, use_container_width=True)
 
-            with col_d2:
-                st.markdown('<p class="section-label">Fréquence instantanée</p>', unsafe_allow_html=True)
-                fig_fi = go.Figure()
-                fig_fi.add_trace(go.Scatter(
+                # ── 2. Variances AVAR / HVAR / PVAR ─────────────────────────
+                st.markdown("#### 2. Variances Log-Log (AVAR / HVAR / PVAR)")
+                col_v1, col_v2, col_v3 = st.columns(3)
+                for col_var, (v, title, col_color) in zip(
+                    [col_v1, col_v2, col_v3],
+                    [(v_avar, "AVAR", PAL['teal']),
+                     (v_hvar, "HVAR", PAL['blue']),
+                     (v_pvar, "PVAR", PAL['amber'])]
+                ):
+                    valid = ~np.isnan(v) & (v > 0)
+                    with col_var:
+                        fig_v = go.Figure()
+                        if valid.sum() > 1:
+                            fig_v.add_trace(go.Scatter(
+                                x=taus[valid].tolist(),
+                                y=np.sqrt(v[valid]).tolist(),
+                                mode='lines', fill='tozeroy',
+                                line=dict(color=col_color, width=2),
+                                name=title
+                            ))
+                        fig_v.update_layout(
+                            title=dict(text=title, font=dict(size=11, color=PAL['marine'])),
+                            height=260, margin=dict(l=10, r=10, t=30, b=10),
+                            xaxis=dict(type="log", title="τ (s)", tickfont=dict(size=8)),
+                            yaxis=dict(type="log", tickfont=dict(size=8)),
+                            plot_bgcolor='rgba(0,0,0,0)', paper_bgcolor='rgba(0,0,0,0)',
+                        )
+                        st.plotly_chart(fig_v, use_container_width=True)
+
+                # ── 3. Fréquence instantanée ─────────────────────────────────
+                st.markdown("#### 3. Fréquence instantanée")
+                fig_fi = go.Figure(go.Scatter(
                     x=t_fi.tolist(), y=freq_inst.tolist(),
-                    line=dict(color=PAL['coral'], width=0.8),
-                    opacity=0.8,
+                    line=dict(color=PAL['coral'], width=0.8), opacity=0.8,
                     name="Fréq. inst."
                 ))
                 fig_fi.update_layout(
-                    height=260,
-                    margin=dict(l=10, r=10, t=10, b=10),
-                    xaxis_title="Temps (ms)",
-                    yaxis_title="Fréq. inst. (Hz)",
-                    plot_bgcolor='rgba(0,0,0,0)',
-                    paper_bgcolor='rgba(0,0,0,0)',
+                    height=280, margin=dict(l=10, r=10, t=10, b=10),
+                    xaxis_title="Temps (ms)", yaxis_title="Fréq. inst. (Hz)",
+                    plot_bgcolor='rgba(0,0,0,0)', paper_bgcolor='rgba(0,0,0,0)',
                 )
                 st.plotly_chart(fig_fi, use_container_width=True)
 
-            # ── TABLEAU DES FEATURES ─────────────────────────────────────────
-            st.markdown('<p class="section-label">Features extraites du burst</p>', unsafe_allow_html=True)
-            valid_avar = ~np.isnan(v_avar) & (v_avar > 0)
+            with col_a2:
+                # ── Features ─────────────────────────────────────────────────
+                st.markdown("#### Caractéristiques")
+                valid_a = ~np.isnan(v_avar) & (v_avar > 0)
+                feat_names = [
+                    "AVAR Amplitude", "AVAR Pente",
+                    "HVAR Amplitude",
+                    "Crest Factor", "Kurtosis", "Skewness",
+                    "PSD Pente basse", "PSD Pente haute",
+                    "Puissance moy.", "Entropie phase",
+                ]
+                feat_vals = [
+                    float(np.mean(np.sqrt(v_avar[valid_a]))) if valid_a.sum() > 0 else 0.0,
+                    float(np.polyfit(np.log10(taus[valid_a]), np.log10(np.sqrt(v_avar[valid_a])), 1)[0]) if valid_a.sum() > 1 else 0.0,
+                    float(np.mean(np.sqrt(v_hvar[valid_a]))) if valid_a.sum() > 0 else 0.0,
+                    float(np.max(np.abs(seg)) / (np.sqrt(np.mean(np.abs(seg) ** 2)) + 1e-12)),
+                    float(kurtosis(np.abs(seg))),
+                    float(skew(np.abs(seg))),
+                    float(np.mean(P_shifted[:len(P_shifted) // 2])),
+                    float(np.mean(P_shifted[len(P_shifted) // 2:])),
+                    float(np.mean(np.abs(seg) ** 2)),
+                    float(-np.sum(
+                        np.abs(phase_purif / (np.sum(np.abs(phase_purif)) + 1e-12)) *
+                        np.log(np.abs(phase_purif / (np.sum(np.abs(phase_purif)) + 1e-12)) + 1e-12)
+                    )),
+                ]
+                df_feat = pd.DataFrame({"Paramètre": feat_names, "Valeur": [f"{v:.6f}" for v in feat_vals]})
+                st.dataframe(df_feat, hide_index=True, use_container_width=True, height=380)
 
-            feat_names = [
-                "AVAR amplitude",
-                "AVAR pente",
-                "HVAR amplitude",
-                "Crest Factor",
-                "Kurtosis",
-                "Skewness",
-                "PSD pente basse",
-                "PSD pente haute",
-                "Puissance moyenne",
-                "Entropie de phase",
-            ]
-            feat_vals = [
-                float(np.mean(np.sqrt(v_avar[valid_avar]))) if valid_avar.sum() > 0 else 0.0,
-                float(np.polyfit(np.log10(taus[valid_avar]), np.log10(np.sqrt(v_avar[valid_avar])), 1)[0]) if valid_avar.sum() > 1 else 0.0,
-                float(np.mean(np.sqrt(v_hvar[valid_avar]))) if valid_avar.sum() > 0 else 0.0,
-                float(np.max(np.abs(seg)) / (np.sqrt(np.mean(np.abs(seg) ** 2)) + 1e-12)),
-                float(kurtosis(np.abs(seg))),
-                float(skew(np.abs(seg))),
-                float(np.mean(P_shifted[:len(P_shifted) // 2])),
-                float(np.mean(P_shifted[len(P_shifted) // 2:])),
-                float(np.mean(np.abs(seg) ** 2)),
-                float(-np.sum(
-                    np.abs(phase_purif / (np.sum(np.abs(phase_purif)) + 1e-12)) *
-                    np.log(np.abs(phase_purif / (np.sum(np.abs(phase_purif)) + 1e-12)) + 1e-12)
-                )),
-            ]
-
-            df_feat = pd.DataFrame({
-                "Feature": feat_names,
-                "Valeur":  [f"{v:.6f}" for v in feat_vals],
-            })
-            st.dataframe(df_feat, hide_index=True, height=420, use_container_width=True)
+                # ── DSP ───────────────────────────────────────────────────────
+                st.markdown("#### Densité Spectrale (DSP — Welch)")
+                fig_psd = go.Figure(go.Scatter(
+                    x=f_shifted.tolist(), y=P_shifted.tolist(),
+                    line=dict(color=PAL['blue'], width=1.2), name="PSD"
+                ))
+                fig_psd.update_layout(
+                    height=280, margin=dict(l=10, r=10, t=10, b=10),
+                    xaxis_title="Fréquence (kHz)", yaxis_title="Puissance (dB)",
+                    plot_bgcolor='rgba(0,0,0,0)', paper_bgcolor='rgba(0,0,0,0)',
+                )
+                st.plotly_chart(fig_psd, use_container_width=True)
 
     else:
         st.info("💡 Sélectionnez d'abord un rapport dans l'onglet **Identification**.")
