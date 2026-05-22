@@ -133,7 +133,7 @@ BASE_DIR = Path(__file__).parent
 icon_path = BASE_DIR / "signoise_bleu.png"
 
 st.set_page_config(
-    page_title="SigNoise Web Pro",
+    page_title="SigNoise Web",
     page_icon=str(icon_path) if icon_path.exists() else "📡",
     layout="wide",
     initial_sidebar_state="collapsed",
