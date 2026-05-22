@@ -852,110 +852,174 @@ with tab_analysis:
 
     if not data:
         st.info("💡 Sélectionnez d'abord un rapport dans l'onglet **Identification**.")
-    elif "bursts_data" not in data:
-        st.warning("⚠️ Ce rapport a été généré avec une ancienne version. Relancez l'identification pour voir l'analyse.")
     else:
-        bursts_data = data["bursts_data"]
-        idx = st.session_state.get("selected_burst_idx", 0)
-        idx = min(idx, len(bursts_data) - 1)
+        # ── Source des bursts_data ───────────────────────────────────────
+        # Cas 1 : JSON exporté depuis SigNoise desktop (nouveau format)
+        # Cas 2 : Nouvelle identification depuis app.py
+        bursts_data = data.get("bursts_data", [])
+        n_bursts    = len(bursts_data)
 
-        st.subheader(f"Burst #{idx + 1} / {len(bursts_data)}")
-        st.caption(f"Source : `{data.get('id', 'N/A')}`")
+        if n_bursts == 0:
+            st.info("💡 Ce rapport ne contient pas de données d'analyse par burst. Relancez l'identification ou exportez depuis SigNoise desktop avec le nouveau format.")
+        else:
+            idx = st.session_state.get("selected_burst_idx", 0)
+            idx = min(idx, n_bursts - 1)
 
-        burst = bursts_data[idx]
+            st.subheader(f"Burst #{idx + 1} / {n_bursts}")
+            st.caption(f"Source : `{data.get('id', 'N/A')}` — {data.get('date', '')}")
 
-        # Lecture directe — tout est pré-calculé
-        t_ms        = burst["t_ms"]
-        phase_brute = burst["phase_brute"]
-        phase_emd   = burst["phase_emd"]
-        taus        = np.array(burst["taus"])
-        v_avar      = np.array(burst["avar"])
-        v_hvar      = np.array(burst["hvar"])
-        v_pvar      = np.array(burst["pvar"])
-        f_shifted   = burst["f_psd"]
-        P_shifted   = burst["psd"]
-        freq_inst   = burst["freq_inst"]
-        t_fi        = burst["t_fi"]
-        fv          = burst["features"]
-        fn_list     = burst["feat_names"]
-        dom         = burst["dom"]
+            burst = bursts_data[idx]
 
-        col_a1, col_a2 = st.columns([2, 1])
+            # Info burst
+            col_i1, col_i2, col_i3 = st.columns(3)
+            col_i1.metric("Classe prédite", burst.get("label", data.get("bursts", {}).get("labels", ["N/A"])[idx] if idx < len(data.get("bursts", {}).get("labels", [])) else "N/A"))
+            col_i2.metric("Confiance", f"{burst.get('proba', 0):.1f}%")
+            col_i3.metric("Burst #", f"{idx + 1} / {n_bursts}")
 
-        with col_a1:
+            # Lecture des données
+            t_ms        = burst.get("t_ms", [])
+            phase_brute = burst.get("phase_brute", [])
+            phase_emd   = burst.get("phase_emd", [])
+            taus        = np.array(burst.get("taus", []))
+            v_avar      = np.array(burst.get("avar", []))
+            v_hvar      = np.array(burst.get("hvar", []))
+            v_pvar      = np.array(burst.get("pvar", []))
+            f_shifted   = burst.get("f_psd", [])
+            P_shifted   = burst.get("psd", [])
+            freq_inst   = burst.get("freq_inst", [])
+            t_fi        = burst.get("t_fi", [])
+            fv          = burst.get("features", [])
+            fn_list     = burst.get("feat_names", [])
+            dom         = burst.get("dom", "N/A")
 
-            # ── Bruit extrait (phase EMD+CMSE) ───────────────────────────────
-            st.markdown("#### 1. Bruit extrait — Phase brute vs EMD+CMSE")
-            fig_p = go.Figure()
-            fig_p.add_trace(go.Scatter(
-                x=t_ms, y=phase_brute,
-                name="Phase brute",
-                line=dict(color="#2B21B5", width=0.8), opacity=0.6
-            ))
-            fig_p.add_trace(go.Scatter(
-                x=t_ms, y=phase_emd,
-                name="Bruit extrait (EMD+CMSE)",
-                line=dict(color=PAL['teal'], width=1.5)
-            ))
-            fig_p.update_layout(
-                height=300,
-                margin=dict(l=10, r=10, t=10, b=10),
-                xaxis_title="Temps (ms)",
-                yaxis_title="Phase (rad)",
-                legend=dict(orientation="h", y=1.12),
-                plot_bgcolor='rgba(0,0,0,0)',
-                paper_bgcolor='rgba(0,0,0,0)',
-            )
-            st.plotly_chart(fig_p, use_container_width=True)
+            col_a1, col_a2 = st.columns([2, 1])
 
-            # ── Variances Allan / Hadamard / Picinbono ───────────────────────
-            st.markdown("#### 2. Variances de stabilité — AVAR / HVAR / PVAR")
-            col_v1, col_v2, col_v3 = st.columns(3)
+            with col_a1:
 
-            for col_var, (v, title, col_color, subtitle) in zip(
-                [col_v1, col_v2, col_v3],
-                [
-                    (v_avar, "AVAR", PAL['teal'],  "Variance d'Allan"),
-                    (v_hvar, "HVAR", PAL['blue'],  "Variance de Hadamard"),
-                    (v_pvar, "PVAR", PAL['amber'], "Variance de Picinbono"),
-                ]
-            ):
-                valid = ~np.isnan(v) & (v > 0)
-                with col_var:
-                    fig_v = go.Figure()
-                    if valid.sum() > 1:
-                        fig_v.add_trace(go.Scatter(
-                            x=taus[valid].tolist(),
-                            y=np.sqrt(v[valid]).tolist(),
-                            mode='lines',
-                            fill='tozeroy',
-                            line=dict(color=col_color, width=2),
-                            name=title
-                        ))
-                    fig_v.update_layout(
-                        title=dict(
-                            text=f"<b>{title}</b><br><sup>{subtitle}</sup>",
-                            font=dict(size=11, color=PAL['marine'])
-                        ),
-                        height=270,
-                        margin=dict(l=10, r=10, t=40, b=10),
-                        xaxis=dict(type="log", title="τ (s)", tickfont=dict(size=8)),
-                        yaxis=dict(type="log", tickfont=dict(size=8)),
+                # ── 1. Phase brute vs Bruit extrait EMD+CMSE ────────────────
+                st.markdown("#### 1. Bruit extrait — Phase brute vs EMD+CMSE")
+                if phase_brute and phase_emd:
+                    fig_p = go.Figure()
+                    fig_p.add_trace(go.Scatter(
+                        x=t_ms, y=phase_brute,
+                        name="Phase brute",
+                        line=dict(color="#2B21B5", width=0.8), opacity=0.6
+                    ))
+                    fig_p.add_trace(go.Scatter(
+                        x=t_ms, y=phase_emd,
+                        name="Bruit extrait (EMD+CMSE)",
+                        line=dict(color=PAL['teal'], width=1.5)
+                    ))
+                    fig_p.update_layout(
+                        height=300,
+                        margin=dict(l=10, r=10, t=10, b=10),
+                        xaxis_title="Temps (ms)",
+                        yaxis_title="Phase (rad)",
+                        legend=dict(orientation="h", y=1.12),
                         plot_bgcolor='rgba(0,0,0,0)',
                         paper_bgcolor='rgba(0,0,0,0)',
                     )
-                    st.plotly_chart(fig_v, use_container_width=True)
+                    st.plotly_chart(fig_p, use_container_width=True)
+                else:
+                    st.info("Phase non disponible dans ce rapport.")
 
-        with col_a2:
+                # ── 2. Variances AVAR / HVAR / PVAR ─────────────────────────
+                st.markdown("#### 2. Variances de stabilité — AVAR / HVAR / PVAR")
+                if len(taus) > 0 and len(v_avar) > 0:
+                    col_v1, col_v2, col_v3 = st.columns(3)
+                    for col_var, (v, title, col_color, subtitle) in zip(
+                        [col_v1, col_v2, col_v3],
+                        [
+                            (v_avar, "AVAR", PAL['teal'],  "Variance d'Allan"),
+                            (v_hvar, "HVAR", PAL['blue'],  "Variance de Hadamard"),
+                            (v_pvar, "PVAR", PAL['amber'], "Variance de Picinbono"),
+                        ]
+                    ):
+                        valid = ~np.isnan(v) & (v > 0)
+                        with col_var:
+                            fig_v = go.Figure()
+                            if valid.sum() > 1:
+                                fig_v.add_trace(go.Scatter(
+                                    x=taus[valid].tolist(),
+                                    y=np.sqrt(v[valid]).tolist(),
+                                    mode='lines',
+                                    fill='tozeroy',
+                                    line=dict(color=col_color, width=2),
+                                    name=title
+                                ))
+                            fig_v.update_layout(
+                                title=dict(
+                                    text=f"<b>{title}</b><br><sup>{subtitle}</sup>",
+                                    font=dict(size=11, color=PAL['marine'])
+                                ),
+                                height=270,
+                                margin=dict(l=10, r=10, t=40, b=10),
+                                xaxis=dict(type="log", title="τ (s)", tickfont=dict(size=8)),
+                                yaxis=dict(type="log", tickfont=dict(size=8)),
+                                plot_bgcolor='rgba(0,0,0,0)',
+                                paper_bgcolor='rgba(0,0,0,0)',
+                            )
+                            st.plotly_chart(fig_v, use_container_width=True)
+                else:
+                    st.info("Variances non disponibles dans ce rapport.")
 
-            # ── Tableau des features ─────────────────────────────────────────
-            st.markdown("#### Features du burst")
-            st.caption(f"Bruit dominant : **{dom}**")
-            df_feat = pd.DataFrame({
-                "Feature": fn_list,
-                "Valeur":  [f"{float(v):.6f}" for v in fv],
-            })
-            st.dataframe(df_feat, hide_index=True, use_container_width=True, height=600)
+                # ── 3. Fréquence instantanée ─────────────────────────────────
+                st.markdown("#### 3. Fréquence instantanée")
+                if freq_inst and t_fi:
+                    fig_fi = go.Figure(go.Scatter(
+                        x=t_fi, y=freq_inst,
+                        line=dict(color=PAL['coral'], width=0.8),
+                        opacity=0.8, name="Fréq. inst."
+                    ))
+                    fig_fi.update_layout(
+                        height=260,
+                        margin=dict(l=10, r=10, t=10, b=10),
+                        xaxis_title="Temps (ms)",
+                        yaxis_title="Fréq. inst. normalisée",
+                        plot_bgcolor='rgba(0,0,0,0)',
+                        paper_bgcolor='rgba(0,0,0,0)',
+                    )
+                    st.plotly_chart(fig_fi, use_container_width=True)
+                else:
+                    st.info("Fréquence instantanée non disponible.")
+
+            with col_a2:
+
+                # ── DSP ───────────────────────────────────────────────────────
+                st.markdown("#### Densité Spectrale (PSD)")
+                if f_shifted and P_shifted:
+                    fig_psd = go.Figure(go.Scatter(
+                        x=f_shifted, y=P_shifted,
+                        line=dict(color=PAL['blue'], width=1.2), name="PSD"
+                    ))
+                    fig_psd.update_layout(
+                        height=250,
+                        margin=dict(l=10, r=10, t=10, b=10),
+                        xaxis_title="Fréquence (kHz)",
+                        yaxis_title="Puissance (dB)",
+                        plot_bgcolor='rgba(0,0,0,0)',
+                        paper_bgcolor='rgba(0,0,0,0)',
+                    )
+                    st.plotly_chart(fig_psd, use_container_width=True)
+                else:
+                    st.info("PSD non disponible.")
+
+                # ── Features ─────────────────────────────────────────────────
+                st.markdown("#### Features du burst")
+                if fv and fn_list:
+                    st.caption(f"Bruit dominant : **{dom}**")
+                    df_feat = pd.DataFrame({
+                        "Feature": fn_list,
+                        "Valeur":  [f"{float(v):.6f}" for v in fv],
+                    })
+                    st.dataframe(
+                        df_feat,
+                        hide_index=True,
+                        use_container_width=True,
+                        height=400
+                    )
+                else:
+                    st.info("Features non disponibles.")
 
 with tab_train:
     st.header("Gestion de d'entraînement")
