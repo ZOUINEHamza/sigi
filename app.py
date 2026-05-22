@@ -195,7 +195,205 @@ PAL = {
     "gold":   "#C4A050",
     "unknown":"#7B5EA7",
 }
+def compute_hvar(phase, taus, fs):
+    hvar, N = [], len(phase)
+    for tau in taus:
+        m = int(round(tau * fs))
+        if m < 1 or 3*m >= N: hvar.append(np.nan); continue
+        pa = moving_average(phase, m); n = len(pa) - 3*m
+        if n <= 0: hvar.append(np.nan); continue
+        d = pa[3*m:3*m+n] - 3*pa[2*m:2*m+n] + 3*pa[m:m+n] - pa[:n]
+        hvar.append(float(np.mean(d**2) / (6*tau**2)))
+    return np.array(hvar)
 
+def compute_pvar(phase, taus, fs):
+    pvar, N = [], len(phase)
+    for tau in taus:
+        m = int(round(tau * fs))
+        if m < 1 or 2*m >= N: pvar.append(np.nan); continue
+        n = N - 2*m
+        if n <= 0: pvar.append(np.nan); continue
+        d = phase[2*m:2*m+n] - 2*phase[m:m+n] + phase[:n]
+        pvar.append(float(np.mean(d**2) / (2*tau**2)))
+    return np.array(pvar)
+
+def apply_emd(phase, max_imf=8, subsample=5000, use_cmse=True):
+    try:
+        from PyEMD import EMD as PyEMD
+        N = len(phase)
+        idx_sub   = np.linspace(0, N-1, min(subsample, N)).astype(int)
+        phase_sub = phase[idx_sub]
+        emd = PyEMD(); emd.MAX_ITERATION = 200
+        imfs = emd.emd(phase_sub.astype(float), max_imf=max_imf)
+        if imfs.ndim == 1:
+            return phase.copy()
+        if use_cmse:
+            n_imfs = len(imfs)
+            recon  = np.zeros(len(phase_sub))
+            mse    = np.zeros(n_imfs)
+            for k in range(n_imfs - 1, -1, -1):
+                recon     += imfs[k]
+                mse[k]     = np.mean((phase_sub - recon) ** 2)
+            var_sig    = np.var(phase_sub) + 1e-20
+            cmse       = mse / var_sig
+            cmse_ext   = np.append(cmse, 0.0)
+            gains      = np.abs(np.diff(cmse_ext))
+            gains     /= (gains.sum() + 1e-20)
+            seuil      = gains.mean() + 0.5 * gains.std()
+            idx_bruit  = np.where(gains < seuil)[0]
+            if len(idx_bruit) == 0:
+                idx_bruit = np.array([0])
+            bruit_sub = np.sum(imfs[idx_bruit], axis=0)
+        else:
+            energies  = np.array([np.sum(i**2) for i in imfs])
+            bruit_sub = imfs[int(np.argmax(energies[:-1]))] if len(energies) > 1 else imfs[0]
+        bruit_full = np.interp(np.arange(N), idx_sub, bruit_sub)
+        return bruit_full
+    except Exception:
+        return phase.copy()
+
+def apply_wavelet_denoise(signal, wavelet="db4"):
+    try:
+        import pywt
+        N = len(signal)
+        if N < 8: return signal.copy()
+        ml     = max(1, min(int(np.log2(N)) - 2, pywt.dwt_max_level(N, wavelet)))
+        coeffs = pywt.wavedec(signal, wavelet, level=ml)
+        sigma  = np.median(np.abs(coeffs[-1])) / 0.6745
+        thr    = sigma * np.sqrt(2 * np.log(N + 1))
+        ct     = [coeffs[0]] + [pywt.threshold(c, thr, "soft") for c in coeffs[1:]]
+        result = pywt.waverec(ct, wavelet)
+        if len(result) >= N: return result[:N]
+        return np.pad(result, (0, N - len(result)))
+    except Exception:
+        return signal.copy()
+
+def loglog_pentes(taus, vals, n_seg=3):
+    valid = ~np.isnan(vals) & (vals > 0) & (taus > 0)
+    if valid.sum() < 4:
+        return np.zeros(n_seg), ["unknown"] * n_seg
+    lt, lv = np.log10(taus[valid]), np.log10(vals[valid])
+    segs   = np.array_split(np.arange(len(lt)), n_seg)
+    slopes, noises = [], []
+    NOISE_TYPES = {"White PM": 2., "Flicker PM": 1., "White FM": 0.,
+                   "Flicker FM": -1., "Random Walk FM": -2.}
+    for s in segs:
+        if len(s) < 2:
+            slopes.append(0.); noises.append("unknown")
+        else:
+            p = np.polyfit(lt[s], lv[s], 1)
+            slopes.append(p[0])
+            noises.append(min(NOISE_TYPES, key=lambda k: abs(NOISE_TYPES[k] - p[0])))
+    return np.array(slopes), noises
+
+def amplitudes_at(taus, vals, targets):
+    valid = ~np.isnan(vals) & (vals > 0) & (taus > 0)
+    if valid.sum() < 2: return np.zeros(len(targets))
+    lt, lv = np.log10(taus[valid]), np.log10(vals[valid])
+    return np.array([np.interp(np.log10(t), lt, lv) for t in targets])
+
+def inflection(taus, vals):
+    valid = ~np.isnan(vals) & (vals > 0) & (taus > 0)
+    if valid.sum() < 6: return 0.
+    lt, lv = np.log10(taus[valid]), np.log10(vals[valid])
+    d2 = np.gradient(np.gradient(lv, lt), lt)
+    peaks, _ = find_peaks(np.abs(d2))
+    if len(peaks) == 0: return 0.
+    return float(lt[peaks[np.argmax(np.abs(d2[peaks]))]])
+
+def features_variance(phase, taus, fs, n_seg=3):
+    target = [taus[len(taus)//5], taus[len(taus)//2], taus[4*len(taus)//5]]
+    feats, votes = [], []
+    for fn in [compute_avar, compute_hvar, compute_pvar]:
+        v = fn(phase, taus, fs)
+        sl, nt = loglog_pentes(taus, v, n_seg)
+        feats.extend(sl.tolist() + amplitudes_at(taus, v, target).tolist() + [inflection(taus, v)])
+        votes.extend(nt)
+    return np.array(feats), max(set(votes), key=votes.count)
+
+def features_psd(iq, fs, nperseg=1024):
+    f, Pxx = welch(iq, fs=fs, nperseg=nperseg, return_onesided=False)
+    Pdb    = 10*np.log10(np.abs(Pxx)+1e-20)
+    f_pos  = f[f >= 0]; P_pos = Pdb[f >= 0]
+    n3     = max(2, len(f_pos) // 3)
+    return np.array([
+        np.polyfit(f_pos[1:n3],  P_pos[1:n3],  1)[0],
+        np.polyfit(f_pos[2*n3:], P_pos[2*n3:], 1)[0],
+        float(f_pos[np.argmax(P_pos)]),
+        float(np.percentile(P_pos[2*n3:], 50)),
+        float(np.max(P_pos) - np.median(P_pos)),
+    ])
+
+def features_freq_inst(iq, fs):
+    freq = np.diff(iq_to_phase(iq)) * fs / (2 * np.pi) / fs
+    p5, p25, p75, p95 = np.percentile(freq, [5, 25, 75, 95])
+    return np.array([float(np.mean(freq)), float(np.std(freq)),
+                     float(skew(freq)), float(kurtosis(freq)),
+                     float(p5), float(p25), float(p75), float(p95)])
+
+def features_power(iq):
+    pwr = (iq.real**2 + iq.imag**2).astype(np.float64)
+    p10, p50, p90 = np.percentile(pwr, [10, 50, 90])
+    mn = float(np.mean(pwr)); st = float(np.std(pwr))
+    return np.array([mn, st, float(p10), float(p50), float(p90),
+                     float(np.max(pwr) / (mn + 1e-20)),
+                     float((p90 - p10) / (p50 + 1e-20))])
+
+def features_phase_ho(phase, n_win=8):
+    seg_len = len(phase) // n_win
+    lv = [np.var(phase[i*seg_len:(i+1)*seg_len]) for i in range(n_win)]
+    p_nz = np.histogram(phase, bins=50, density=True)[0] + 1e-20
+    return np.array([float(np.mean(lv)), float(np.std(lv)),
+                     float(skew(phase)), float(kurtosis(phase)),
+                     float(-np.sum(p_nz * np.log2(p_nz)))])
+
+def features_emd(phase, max_imf=8, subsample=5000):
+    try:
+        from PyEMD import EMD as PyEMD
+        N  = len(phase)
+        ph = phase[np.linspace(0, N-1, min(subsample, N)).astype(int)]
+        emd = PyEMD(); emd.MAX_ITERATION = 200
+        imfs = emd.emd(ph.astype(float), max_imf=max_imf)
+        if imfs.ndim == 1: imfs = imfs.reshape(1, -1)
+    except Exception:
+        return np.zeros(4)
+    energies = np.array([np.sum(i**2) for i in imfs])
+    total    = energies.sum() + 1e-20
+    idx_dom  = int(np.argmax(energies[:-1])) if len(energies) > 1 else 0
+    return np.array([float(energies[idx_dom]/total), float(energies[0]/total),
+                     float(energies[-1]/total), float(idx_dom)])
+
+def full_feature_vector(iq_seg, taus, fs, n_seg=3,
+                         use_emd=True, use_wt=False, use_cmse=True,
+                         emd_subsample=5000, emd_max_imf=8, wt_wavelet="db4"):
+    phase_brute = iq_to_phase(iq_seg)
+    phase_emd   = apply_emd(phase_brute, max_imf=emd_max_imf,
+                             subsample=emd_subsample, use_cmse=use_cmse) if use_emd else phase_brute.copy()
+    phase_purif = apply_wavelet_denoise(phase_emd, wavelet=wt_wavelet) if use_wt else phase_emd.copy()
+    if len(phase_purif) != len(phase_brute):
+        if len(phase_purif) > len(phase_brute): phase_purif = phase_purif[:len(phase_brute)]
+        else: phase_purif = np.pad(phase_purif, (0, len(phase_brute)-len(phase_purif)))
+    f_var, dom = features_variance(phase_purif, taus, fs, n_seg)
+    fv = np.concatenate([f_var,
+                          features_psd(iq_seg, fs),
+                          features_freq_inst(iq_seg, fs),
+                          features_power(iq_seg),
+                          features_phase_ho(phase_purif),
+                          features_emd(phase_brute, emd_max_imf, emd_subsample)])
+    return fv, dom, phase_brute, phase_purif
+
+def feature_names(n_seg=3):
+    n = []
+    for v in ["AVAR", "HVAR", "PVAR"]:
+        for s in range(n_seg): n.append(f"{v}_pente{s+1}")
+        for a in range(3):     n.append(f"{v}_amp{a+1}")
+        n.append(f"{v}_inflexion")
+    n += ["PSD_pente_lo","PSD_pente_hi","PSD_f_pic","PSD_plancher","PSD_dynamique"]
+    n += ["FI_mean","FI_std","FI_skew","FI_kurt","FI_p5","FI_p25","FI_p75","FI_p95"]
+    n += ["PWR_mean","PWR_std","PWR_p10","PWR_p50","PWR_p90","PWR_crest","PWR_iqr"]
+    n += ["PH_varloc_mean","PH_varloc_std","PH_skew","PH_kurt","PH_entropie"]
+    n += ["EMD_ratio_dom","EMD_ratio_imf1","EMD_ratio_residu","EMD_idx_dom"]
+    return n
 # --- STYLE CSS (MATCHING DESKTOP) ---
 st.markdown(f"""
     <style>
@@ -588,11 +786,48 @@ with tab_analysis:
     st.header("Analyse de Signature de Bruit")
 
     data = st.session_state.get("current_data")
-    if data:
-        idx = st.session_state.get("selected_burst_idx", 0)
-        st.subheader(f"Détails du Burst #{idx + 1}")
 
-        # ── Reconvertir les IQ depuis JSON ───────────────────────────────────
+    # ── Import fichier IQ manuel ─────────────────────────────────────────────
+    with st.expander("📁 Importer un fichier IQ pour analyse", expanded=False):
+        uploaded_iq = st.file_uploader(
+            "Charger un fichier IQ (.iq, .bin)",
+            type=["iq", "bin"], key="analysis_iq_upload"
+        )
+        if uploaded_iq:
+            params_up = st.session_state.get("params", {})
+            fs_up     = params_up.get("fs_original", 80000)
+            decim_up  = params_up.get("decim", 2)
+            if st.button("🔬 Analyser ce fichier IQ", key="btn_analyse_iq"):
+                with st.spinner("Chargement et traitement..."):
+                    raw     = uploaded_iq.read()
+                    iq_full = _load_iq_full(raw)
+                    iq_full = _preprocess_iq(iq_full, fs_up, decim=decim_up)
+                    fs_eff  = fs_up // decim_up
+                    bursts_idx = _detect_bursts(
+                        iq_full, fs_eff,
+                        smooth_ms    = params_up.get("burst_smooth_ms", 1.0),
+                        threshold_db = params_up.get("burst_threshold_db", 8.0),
+                        min_burst_ms = params_up.get("burst_min_ms", 10.0),
+                        merge_gap_ms = params_up.get("burst_merge_gap_ms", 2.0),
+                    )
+                    if bursts_idx:
+                        st.session_state["analysis_iq_bursts"] = [iq_full[s:e].copy() for s, e in bursts_idx]
+                        st.session_state["analysis_iq_fs"]     = fs_eff
+                        st.session_state["analysis_iq_name"]   = uploaded_iq.name
+                        st.success(f"✅ {len(bursts_idx)} burst(s) détecté(s) dans '{uploaded_iq.name}'")
+                    else:
+                        st.error("Aucun burst AIS détecté dans ce fichier.")
+
+    # ── Source des bursts ────────────────────────────────────────────────────
+    manual_bursts = st.session_state.get("analysis_iq_bursts", [])
+    manual_fs     = st.session_state.get("analysis_iq_fs", 40_000)
+    manual_name   = st.session_state.get("analysis_iq_name", "")
+
+    if manual_bursts:
+        iq_bursts = manual_bursts
+        fs_source = manual_fs
+        st.info(f"📁 Source : fichier importé `{manual_name}` — {len(iq_bursts)} burst(s)")
+    elif data:
         iq_bursts_raw = data.get("iq_bursts", [])
         iq_bursts = []
         for burst in iq_bursts_raw:
@@ -601,184 +836,168 @@ with tab_analysis:
                     iq_bursts.append(np.array([complex(s[0], s[1]) for s in burst], dtype=np.complex64))
                 else:
                     iq_bursts.append(np.array(burst, dtype=np.complex64))
-
-        seg = None
-        phase_brute = phase_purif = phase_emd = None
-        v_avar = v_hvar = v_pvar = None
-        f_shifted = P_shifted = None
-        freq_inst = t_fi = t_ms = taus = None
-        fv = fn_list = dom = None
-
+        params    = st.session_state.get("params", {})
+        fs_source = params.get("fs", 40_000)
         if iq_bursts:
-            idx = min(idx, len(iq_bursts) - 1)
-            seg = iq_bursts[idx]
-            params = st.session_state.get("params", {})
-            fs     = params.get("fs", 40_000)
-            taus   = np.logspace(np.log10(10e-6), np.log10(100e-3), 40)
+            st.info(f"📂 Source : archive `{data.get('id', 'N/A')}` — {len(iq_bursts)} burst(s)")
+    else:
+        iq_bursts = []
+        fs_source = 40_000
 
-            # Phase brute
-            phase_brute = iq_to_phase(seg)
-            t_ms = np.arange(len(phase_brute)) / fs * 1000
+    if not iq_bursts:
+        st.info("💡 Chargez un rapport dans **Identification** ou importez un fichier IQ ci-dessus.")
+    else:
+        idx = st.session_state.get("selected_burst_idx", 0)
+        idx = min(idx, len(iq_bursts) - 1)
+        st.subheader(f"Détails du Burst #{idx + 1}")
+        idx = st.slider("Sélectionner le burst :", 0, len(iq_bursts) - 1, idx, key="burst_slider_analysis")
+        st.session_state.selected_burst_idx = idx
 
-            # EMD+CMSE (même pipeline que SigNoise)
-            use_emd  = params.get("use_emd",  True)
-            use_wt   = params.get("use_wt",   False)
-            use_cmse = params.get("use_cmse", True)
-            emd_sub  = params.get("emd_sub",  5000)
-            emd_imf  = params.get("emd_imf",  8)
-            wt_wav   = params.get("wt_wav",   "db4")
+        seg    = iq_bursts[idx]
+        fs     = fs_source
+        params = st.session_state.get("params", {})
+        taus   = np.logspace(np.log10(10e-6), np.log10(100e-3), 40)
 
-            phase_emd  = apply_emd(phase_brute, max_imf=emd_imf,
-                                   subsample=emd_sub, use_cmse=use_cmse) if use_emd else phase_brute.copy()
-            phase_purif = apply_wavelet_denoise(phase_emd, wavelet=wt_wav) if use_wt else phase_emd.copy()
-            if len(phase_purif) != len(phase_brute):
-                if len(phase_purif) > len(phase_brute):
-                    phase_purif = phase_purif[:len(phase_brute)]
-                else:
-                    phase_purif = np.pad(phase_purif, (0, len(phase_brute) - len(phase_purif)))
+        use_emd  = params.get("use_emd",  True)
+        use_wt   = params.get("use_wt",   False)
+        use_cmse = params.get("use_cmse", True)
+        emd_sub  = params.get("emd_sub",  5000)
+        emd_imf  = params.get("emd_imf",  8)
+        wt_wav   = params.get("wt_wav",   "db4")
+        n_seg    = params.get("nseg",     3)
 
-            # Variances (mêmes fonctions que SigNoise)
-            v_avar = compute_avar(phase_purif, taus, fs)
-            v_hvar = compute_hvar(phase_purif, taus, fs)
-            v_pvar = compute_pvar(phase_purif, taus, fs)
+        # ── Pipeline identique à SigNoise AnalysisBurstWorker ────────────────
+        phase_brute = iq_to_phase(seg)
+        t_ms        = np.arange(len(phase_brute)) / fs * 1000
 
-            # PSD Welch
-            f_psd, Pxx = welch(seg, fs=fs, nperseg=min(1024, len(seg) // 2), return_onesided=False)
-            Pdb = 10 * np.log10(np.abs(Pxx) + 1e-20)
-            f_shifted = np.fft.fftshift(f_psd) / 1e3
-            P_shifted = np.fft.fftshift(Pdb)
+        phase_emd   = apply_emd(phase_brute, max_imf=emd_imf,
+                                 subsample=emd_sub, use_cmse=use_cmse) if use_emd else phase_brute.copy()
+        phase_purif = apply_wavelet_denoise(phase_emd, wavelet=wt_wav) if use_wt else phase_emd.copy()
+        if len(phase_purif) != len(phase_brute):
+            if len(phase_purif) > len(phase_brute):
+                phase_purif = phase_purif[:len(phase_brute)]
+            else:
+                phase_purif = np.pad(phase_purif, (0, len(phase_brute) - len(phase_purif)))
 
-            # Fréquence instantanée
-            freq_inst = np.diff(iq_to_phase(seg)) * fs / (2 * np.pi)
-            freq_inst = np.append(freq_inst, freq_inst[-1])
-            t_fi = np.arange(len(freq_inst)) / fs * 1000
+        v_avar = compute_avar(phase_purif, taus, fs)
+        v_hvar = compute_hvar(phase_purif, taus, fs)
+        v_pvar = compute_pvar(phase_purif, taus, fs)
 
-            # Features complètes (même pipeline que SigNoise)
-            try:
-                fv, dom, _, _ = full_feature_vector(
-                    seg, taus, fs,
-                    n_seg=params.get("nseg", 3),
-                    use_emd=use_emd, use_wt=use_wt, use_cmse=use_cmse,
-                    emd_subsample=emd_sub, emd_max_imf=emd_imf, wt_wavelet=wt_wav
-                )
-                fn_list = feature_names(params.get("nseg", 3))
-            except Exception:
-                fv = None; fn_list = None; dom = "N/A"
+        f_psd, Pxx = welch(seg, fs=fs, nperseg=min(1024, len(seg) // 2), return_onesided=False)
+        Pdb        = 10 * np.log10(np.abs(Pxx) + 1e-20)
+        f_shifted  = np.fft.fftshift(f_psd) / 1e3
+        P_shifted  = np.fft.fftshift(Pdb)
+
+        # Fréquence instantanée — identique à SigNoise ligne 2451
+        freq_inst = np.diff(iq_to_phase(seg)) * fs / (2 * np.pi) / fs
+        freq_inst = np.append(freq_inst, freq_inst[-1])
+        t_fi      = np.arange(len(freq_inst)) / fs * 1000
+
+        try:
+            fv, dom, _, _ = full_feature_vector(
+                seg, taus, fs, n_seg,
+                use_emd=use_emd, use_wt=use_wt, use_cmse=use_cmse,
+                emd_subsample=emd_sub, emd_max_imf=emd_imf, wt_wavelet=wt_wav
+            )
+            fn_list = feature_names(n_seg)
+        except Exception as e:
+            fv = None; fn_list = None; dom = "N/A"
+            st.warning(f"Calcul features échoué : {e}")
 
         col_a1, col_a2 = st.columns([2, 1])
 
         with col_a1:
-
             # ── 1. Phase brute vs EMD+CMSE ───────────────────────────────────
             st.markdown("#### 1. Phase du signal (Brute vs EMD+CMSE)")
-            if seg is not None:
-                fig_p = go.Figure()
-                fig_p.add_trace(go.Scatter(
-                    x=t_ms.tolist(), y=phase_brute.tolist(),
-                    name="Phase brute",
-                    line=dict(color="#2B21B5", width=0.8), opacity=0.8
-                ))
-                fig_p.add_trace(go.Scatter(
-                    x=t_ms.tolist(), y=phase_emd.tolist(),
-                    name="EMD+CMSE",
-                    line=dict(color=PAL['teal'], width=1.5)
-                ))
-                fig_p.update_layout(
-                    height=300, margin=dict(l=10, r=10, t=10, b=10),
-                    xaxis_title="Temps (ms)", yaxis_title="Phase (rad)",
-                    legend=dict(orientation="h", y=1.1),
-                    plot_bgcolor='rgba(0,0,0,0)', paper_bgcolor='rgba(0,0,0,0)',
-                )
-                st.plotly_chart(fig_p, use_container_width=True)
-            else:
-                st.info("Aucun burst IQ disponible.")
+            fig_p = go.Figure()
+            fig_p.add_trace(go.Scatter(
+                x=t_ms.tolist(), y=phase_brute.tolist(),
+                name="Phase brute",
+                line=dict(color="#2B21B5", width=0.8), opacity=0.8
+            ))
+            fig_p.add_trace(go.Scatter(
+                x=t_ms.tolist(), y=phase_emd.tolist(),
+                name="EMD+CMSE",
+                line=dict(color=PAL['teal'], width=1.5)
+            ))
+            fig_p.update_layout(
+                height=300, margin=dict(l=10, r=10, t=10, b=10),
+                xaxis_title="Temps (ms)", yaxis_title="Phase (rad)",
+                legend=dict(orientation="h", y=1.1),
+                plot_bgcolor='rgba(0,0,0,0)', paper_bgcolor='rgba(0,0,0,0)',
+            )
+            st.plotly_chart(fig_p, use_container_width=True)
 
             # ── 2. Variances AVAR / HVAR / PVAR ─────────────────────────────
             st.markdown("#### 2. Variances Log-Log (AVAR / HVAR / PVAR)")
-            if seg is not None:
-                col_v1, col_v2, col_v3 = st.columns(3)
-                for col_var, (v, title, col_color) in zip(
-                    [col_v1, col_v2, col_v3],
-                    [(v_avar, "AVAR", PAL['teal']),
-                     (v_hvar, "HVAR", PAL['blue']),
-                     (v_pvar, "PVAR", PAL['amber'])]
-                ):
-                    valid = ~np.isnan(v) & (v > 0)
-                    with col_var:
-                        fig_v = go.Figure()
-                        if valid.sum() > 1:
-                            fig_v.add_trace(go.Scatter(
-                                x=taus[valid].tolist(),
-                                y=np.sqrt(v[valid]).tolist(),
-                                mode='lines', fill='tozeroy',
-                                line=dict(color=col_color, width=2),
-                                name=title
-                            ))
-                        fig_v.update_layout(
-                            title=dict(text=title, font=dict(size=11, color=PAL['marine'])),
-                            height=260, margin=dict(l=10, r=10, t=30, b=10),
-                            xaxis=dict(type="log", title="τ (s)", tickfont=dict(size=8)),
-                            yaxis=dict(type="log", tickfont=dict(size=8)),
-                            plot_bgcolor='rgba(0,0,0,0)', paper_bgcolor='rgba(0,0,0,0)',
-                        )
-                        st.plotly_chart(fig_v, use_container_width=True)
+            col_v1, col_v2, col_v3 = st.columns(3)
+            for col_var, (v, title, col_color) in zip(
+                [col_v1, col_v2, col_v3],
+                [(v_avar, "AVAR", PAL['teal']),
+                 (v_hvar, "HVAR", PAL['blue']),
+                 (v_pvar, "PVAR", PAL['amber'])]
+            ):
+                valid = ~np.isnan(v) & (v > 0)
+                with col_var:
+                    fig_v = go.Figure()
+                    if valid.sum() > 1:
+                        fig_v.add_trace(go.Scatter(
+                            x=taus[valid].tolist(),
+                            y=np.sqrt(v[valid]).tolist(),
+                            mode='lines', fill='tozeroy',
+                            line=dict(color=col_color, width=2),
+                            name=title
+                        ))
+                    fig_v.update_layout(
+                        title=dict(text=title, font=dict(size=11, color=PAL['marine'])),
+                        height=260, margin=dict(l=10, r=10, t=30, b=10),
+                        xaxis=dict(type="log", title="τ (s)", tickfont=dict(size=8)),
+                        yaxis=dict(type="log", tickfont=dict(size=8)),
+                        plot_bgcolor='rgba(0,0,0,0)', paper_bgcolor='rgba(0,0,0,0)',
+                    )
+                    st.plotly_chart(fig_v, use_container_width=True)
 
             # ── 3. Fréquence instantanée ─────────────────────────────────────
             st.markdown("#### 3. Fréquence instantanée")
-            if seg is not None:
-                fig_fi = go.Figure(go.Scatter(
-                    x=t_fi.tolist(), y=freq_inst.tolist(),
-                    line=dict(color=PAL['coral'], width=0.8),
-                    opacity=0.8, name="Fréq. inst."
-                ))
-                fig_fi.update_layout(
-                    height=280, margin=dict(l=10, r=10, t=10, b=10),
-                    xaxis_title="Temps (ms)", yaxis_title="Fréq. inst. (Hz)",
-                    plot_bgcolor='rgba(0,0,0,0)', paper_bgcolor='rgba(0,0,0,0)',
-                )
-                st.plotly_chart(fig_fi, use_container_width=True)
+            fig_fi = go.Figure(go.Scatter(
+                x=t_fi.tolist(), y=freq_inst.tolist(),
+                line=dict(color=PAL['coral'], width=0.8),
+                opacity=0.8, name="Fréq. inst."
+            ))
+            fig_fi.update_layout(
+                height=280, margin=dict(l=10, r=10, t=10, b=10),
+                xaxis_title="Temps (ms)", yaxis_title="Fréq. inst. normalisée",
+                plot_bgcolor='rgba(0,0,0,0)', paper_bgcolor='rgba(0,0,0,0)',
+            )
+            st.plotly_chart(fig_fi, use_container_width=True)
 
         with col_a2:
-
-            # ── Features (même liste que feature_names() de SigNoise) ────────
+            # ── Features ─────────────────────────────────────────────────────
             st.markdown("#### Caractéristiques")
             if fv is not None and fn_list is not None:
+                st.caption(f"Bruit dominant : **{dom}**")
                 df_feat = pd.DataFrame({
                     "Feature": fn_list,
                     "Valeur":  [f"{float(v):.6f}" for v in fv],
                 })
-                st.caption(f"Bruit dominant : **{dom}**")
             else:
-                df_feat = pd.DataFrame({
-                    "Feature": ["AVAR Slope", "HVAR Amp", "Crest Factor", "Kurtosis", "Skewness"],
-                    "Valeur":  ["—"] * 5
-                })
+                df_feat = pd.DataFrame({"Feature": ["N/A"], "Valeur": ["—"]})
             st.dataframe(df_feat, hide_index=True, use_container_width=True, height=400)
 
-            # ── DSP Welch ────────────────────────────────────────────────────
+            # ── DSP ───────────────────────────────────────────────────────────
             st.markdown("#### Densité Spectrale (DSP — Welch)")
-            if seg is not None:
-                fig_psd = go.Figure(go.Scatter(
-                    x=f_shifted.tolist(), y=P_shifted.tolist(),
-                    line=dict(color=PAL['blue'], width=1.2), name="PSD"
-                ))
-                fig_psd.update_layout(
-                    height=280, margin=dict(l=10, r=10, t=10, b=10),
-                    xaxis_title="Fréquence (kHz)", yaxis_title="Puissance (dB)",
-                    plot_bgcolor='rgba(0,0,0,0)', paper_bgcolor='rgba(0,0,0,0)',
-                )
-                st.plotly_chart(fig_psd, use_container_width=True)
-            else:
-                psd = data.get("psd", {})
-                if psd:
-                    fig_psd = go.Figure(go.Scatter(
-                        x=psd.get('f'), y=psd.get('p'),
-                        line=dict(color=PAL['blue'])
-                    ))
-                    fig_psd.update_layout(height=250, margin=dict(l=10, r=10, t=10, b=10))
-                    st.plotly_chart(fig_psd, use_container_width=True)
+            fig_psd = go.Figure(go.Scatter(
+                x=f_shifted.tolist(), y=P_shifted.tolist(),
+                line=dict(color=PAL['blue'], width=1.2), name="PSD"
+            ))
+            fig_psd.update_layout(
+                height=280, margin=dict(l=10, r=10, t=10, b=10),
+                xaxis_title="Fréquence (kHz)", yaxis_title="Puissance (dB)",
+                plot_bgcolor='rgba(0,0,0,0)', paper_bgcolor='rgba(0,0,0,0)',
+            )
+            st.plotly_chart(fig_psd, use_container_width=True)
 
-    else:
+    if not data and not st.session_state.get("analysis_iq_bursts"):
         st.info("💡 Sélectionnez d'abord un rapport dans l'onglet **Identification**.")
 
 with tab_train:
