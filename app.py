@@ -897,18 +897,13 @@ with tab_analysis:
             with col_a1:
 
                 # ── 1. Phase brute vs Bruit extrait EMD+CMSE ────────────────
-                st.markdown("#### 1. Bruit extrait — Phase brute vs EMD+CMSE")
+                st.markdown("#### 1. Bruit extrait")
                 if phase_brute and phase_emd:
                     fig_p = go.Figure()
                     fig_p.add_trace(go.Scatter(
-                        x=t_ms, y=phase_brute,
-                        name="Phase brute",
-                        line=dict(color="#2B21B5", width=0.8), opacity=0.6
-                    ))
-                    fig_p.add_trace(go.Scatter(
                         x=t_ms, y=phase_emd,
                         name="Bruit extrait (EMD+CMSE)",
-                        line=dict(color=PAL['teal'], width=1.5)
+                        line=dict(color=PAL['teal'], width=0.8)
                     ))
                     fig_p.update_layout(
                         height=300,
