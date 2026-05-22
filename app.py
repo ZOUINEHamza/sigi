@@ -386,17 +386,99 @@ with tab_id:
                 labels = list(dist.keys())
                 values = list(dist.values())
                 fig = go.Figure(data=[go.Bar(x=labels, y=values, marker_color=PAL['teal'])])
-                fig.update_layout(height=350, margin=dict(l=20, r=20, t=20, b=20))
+                fig.update_layout(height=300, margin=dict(l=20, r=20, t=20, b=20))
                 st.plotly_chart(fig, width="stretch")
-        
+
         with col_g2:
             st.markdown("#### Probabilités moyennes")
-            labels = list(dist.keys())
+            labels = list(dist.keys()) if dist else []
             if labels:
-                probs = [0.95] * len(labels) # Valeurs simulées
-                fig_p = go.Figure(data=[go.Bar(y=labels, x=probs, orientation='h', marker_color=PAL['blue'])])
-                fig_p.update_layout(height=350, margin=dict(l=20, r=20, t=20, b=20))
+                probs = [0.95] * len(labels)
+                fig_p = go.Figure(data=[go.Bar(
+                    y=labels,
+                    x=probs,
+                    orientation='h',
+                    marker_color=PAL['blue'],
+                    text=[f"{p*100:.1f}%" for p in probs],
+                    textposition='inside',
+                    insidetextanchor='middle',
+                )])
+                fig_p.update_layout(
+                    height=180,          # ← plus petit qu'avant (était 350)
+                    margin=dict(l=10, r=20, t=10, b=10),
+                    xaxis=dict(range=[0, 1], showticklabels=False, showgrid=False),
+                    yaxis=dict(tickfont=dict(size=11)),
+                    bargap=0.3,
+                    plot_bgcolor='rgba(0,0,0,0)',
+                    paper_bgcolor='rgba(0,0,0,0)',
+                )
                 st.plotly_chart(fig_p, width="stretch")
+
+        # --- BLOC INCONNUS (style SigNoise desktop) ---
+        inconnus = {k: v for k, v in data.get("distribution", {}).items() if "INCONNU" in k.upper()}
+        n_inconnus = m.get("n_inconnus", 0)
+
+        if n_inconnus > 0 or inconnus:
+            st.markdown("---")
+            st.markdown(f"""
+            <div style="
+                background: linear-gradient(90deg, #2a1a4a 0%, #3b1f6e 100%);
+                border-radius: 10px;
+                padding: 16px 20px;
+                margin-bottom: 12px;
+                border-left: 4px solid {PAL['unknown']};
+                display: flex;
+                align-items: center;
+                gap: 12px;
+            ">
+                <span style="font-size:22px;">👁</span>
+                <div>
+                    <span style="color:white; font-weight:700; font-size:15px;">
+                        {n_inconnus} burst(s) classé(s) INCONNU
+                    </span><br>
+                    <span style="color:#b8a8d4; font-size:12px;">
+                        Émetteur(s) non reconnu(s) par le modèle — en attente de qualification
+                    </span>
+                </div>
+            </div>
+            """, unsafe_allow_html=True)
+
+            if INCONNUS_FILE.exists():
+                with open(INCONNUS_FILE, "r") as f:
+                    inc_db = json.load(f)
+
+                if inc_db:
+                    data_inc = []
+                    for uid, info in inc_db.items():
+                        statut = info.get("statut", "EN_ATTENTE")
+                        couleur = "#BA7517" if statut == "EN_ATTENTE" else "#1D9E75"
+                        data_inc.append({
+                            "ID Groupe": uid,
+                            "Captures": info.get("n", 0),
+                            "Statut": statut,
+                            "Première vue": info.get("date_premier", "N/A")[:10],
+                            "Dernière vue": info.get("date_dernier", "N/A")[:10],
+                        })
+                    df_inc = pd.DataFrame(data_inc)
+
+                    st.markdown(f"**{len(inc_db)} groupe(s) d'inconnus détectés :**")
+                    st.dataframe(
+                        df_inc,
+                        hide_index=True,
+                        height=min(150 + 35 * len(df_inc), 300),
+                        column_config={
+                            "Captures": st.column_config.ProgressColumn(
+                                "Captures",
+                                min_value=0,
+                                max_value=20,
+                                format="%d",
+                            ),
+                            "Statut": st.column_config.TextColumn("Statut"),
+                        },
+                        width="stretch"
+                    )
+                else:
+                    st.info("Aucun groupe d'inconnus enregistré dans la base.")
 
         # --- TABLEAU DES BURSTS ---
         st.markdown("#### Détails des Bursts détectés")
