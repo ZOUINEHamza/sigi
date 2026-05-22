@@ -1023,9 +1023,9 @@ Les hypothèses de travail ont été **validées expérimentalement** :
     st.markdown("---")
     st.markdown(f"""
     <div style="text-align:center; color:{PAL['mid']}; font-size:12px;">
-        SigNoise Web Pro v1.0 — Cloud Edition &nbsp;·&nbsp;
+        SigNoise Web  — C &nbsp;·&nbsp;
         École Royale Navale / IRENav &nbsp;·&nbsp;
-        Marine Royale Marocaine &nbsp;·&nbsp; 2025–2026
+         &nbsp;·&nbsp; 2025–2026
     </div>
     """, unsafe_allow_html=True)
 
