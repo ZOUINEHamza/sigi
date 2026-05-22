@@ -774,7 +774,7 @@ with tab_inc:
 
 
 with tab_params:
-    st.header("Configuration Avancée")
+    st.header("Configuration")
 
     col_p1, col_p2 = st.columns(2)
 
@@ -819,7 +819,6 @@ with tab_params:
         with st.container(border=True):
             st.markdown('<p class="section-label">EMD+CMSE — Décomposition Modale Empirique</p>', unsafe_allow_html=True)
             use_emd  = st.toggle("Activer l'EMD",               value=True)
-            use_cmse = st.toggle("Utiliser CMSE (recommandé)",  value=True)
             emd_sub  = st.number_input("Sous-échantillonnage (pts)", min_value=100, max_value=200_000, value=5000, step=500)
             emd_imf  = st.number_input("IMFs max",                   min_value=2,   max_value=30,      value=8,    step=1)
 
