@@ -646,7 +646,7 @@ if 'logo_en_b64' not in st.session_state:
 # Utilisation d'icônes professionnelles (Flaticon ou similaires via URL/Local)
 tabs_config = [
     {"label": "Identification", "icon": "https://cdn-icons-png.flaticon.com/512/1077/1077976.png"},
-    {"label": "Analyse Signal", "icon": "https://cdn-icons-png.flaticon.com/512/2103/2103633.png"},
+    {"label": "Analyse Bruit", "icon": "https://cdn-icons-png.flaticon.com/512/2103/2103633.png"},
     {"label": "Entraînement", "icon": "https://cdn-icons-png.flaticon.com/512/2103/2103445.png"},
     {"label": "Inconnus", "icon": "https://cdn-icons-png.flaticon.com/512/912/912214.png"},
     {"label": "Paramètres", "icon": "https://cdn-icons-png.flaticon.com/512/3524/3524659.png"},
@@ -657,7 +657,7 @@ tabs_config = [
 # on garde le texte mais on améliore le rendu via CSS ou colonnes si besoin.
 tab_id, tab_analysis, tab_train, tab_inc, tab_params, tab_about = st.tabs([
     "Identification",
-    "Analyse Signal",
+    "Analyse Bruit",
     "Entraînement",
     "Inconnus",
     "Paramètres",
