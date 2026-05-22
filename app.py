@@ -1023,12 +1023,13 @@ Les hypothèses de travail ont été **validées expérimentalement** :
     st.markdown("---")
     st.markdown(f"""
     <div style="text-align:center; color:{PAL['mid']}; font-size:12px;">
-        SigNoise Web  — C &nbsp;·&nbsp;
+        SigNoise Web &nbsp;·&nbsp;
         École Royale Navale / IRENav &nbsp;·&nbsp;
-         &nbsp;·&nbsp; 2025–2026
+         &nbsp;·&nbsp;PFE: 2025–2026
     </div>
     """, unsafe_allow_html=True)
 
 # --- FOOTER ---
 st.markdown("---")
-st.markdown("<div class='footer'>SigNoise © 2026 </div>", unsafe_allow_html=True)
+st.markdown("<div class='footer'>SigNoise © 2026;"
+"EV2 ZOUINE Hamza & EV2 EL MAACHI Saad </div>", unsafe_allow_html=True)
