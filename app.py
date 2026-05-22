@@ -176,7 +176,7 @@ st.set_page_config(
     page_title="SigNoise Web Pro",
     page_icon=str(icon_path) if icon_path.exists() else "📡",
     layout="wide",
-    initial_sidebar_state="expanded"
+    initial_sidebar_state="collapsed",
 )
 
 # --- PALETTE & STYLE ---
@@ -232,7 +232,8 @@ st.markdown(f"""
     }}
     [data-testid="stMetricLabel"] {{ color: {PAL['mid']}; font-size: 11px; text-transform: uppercase; letter-spacing: 1px; }}
     [data-testid="stMetricValue"] {{ color: {PAL['marine']}; font-size: 24px; font-weight: 700; }}
-    
+    [data-testid="stSidebar"] {{display: none !important;}}
+    [data-testid="collapsedControl"] {{display: none !important;}}
     /* Custom Header */
     .header-box {{
         background: {PAL['white']};
