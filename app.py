@@ -715,4 +715,4 @@ with tab_about:
 
 # --- FOOTER ---
 st.markdown("---")
-st.markdown("<div class='footer'>SigNoise Pro © 2026 - École Navale</div>", unsafe_allow_html=True)
+st.markdown("<div class='footer'>SigNoise © 2026 </div>", unsafe_allow_html=True)
