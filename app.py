@@ -835,7 +835,7 @@ with tab_id:
         if bursts:
             df_bursts = pd.DataFrame({
                 "Burst #": range(1, len(bursts.get("labels", [])) + 1),
-                
+                "Classe prédite": bursts.get("labels", []),
                 "Confiance (%)": bursts.get("probas", [])
             })
             st.dataframe(df_bursts, width="stretch", height=300)
