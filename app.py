@@ -630,14 +630,22 @@ with tab_inc:
             
             data_inc = []
             for uid, info in inc_db.items():
+                sources = info.get("fichiers_sources", [])
+                if not sources:
+                    fichier_affiche = "—"
+                elif len(sources) == 1:
+                    fichier_affiche = Path(sources[0]).name
+                else:
+                    fichier_affiche = "  |  ".join(Path(f).name for f in sources)
+
                 data_inc.append({
                     "ID": uid,
-                    "Fichier source": info.get("fichier", info.get("source_file", "N/A")),
+                    "Fichier source": fichier_affiche,
                     "Captures": info.get("n", 0),
                     "Statut": info.get("statut", "EN_ATTENTE"),
-                    "Date de traitement": info.get("date_dernier", info.get("date_premier", "N/A"))[:10],
+                    "Date": info.get("date_dernier", info.get("date_premier", "N/A"))[:10],
                 })
-            
+
             st.table(pd.DataFrame(data_inc))
             
             st.markdown("---")
