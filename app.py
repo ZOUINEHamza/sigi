@@ -1012,7 +1012,7 @@ Les hypothèses de travail ont été **validées expérimentalement** :
             st.markdown("Manuel d'installation, prise en main et fonctionnalités :")
             st.link_button(
                 "Accéder au guide d'utilisation",
-                "https://drive.google.com/file/d/1fdFobIpf0ZmNxC1mn6wCpf8f6PDm0U69/view?usp=sharing",
+                "https://drive.google.com/file/d/1LwW_DU1MAIXDMeJ6eyOswKefYKBhqLDi/view?usp=drive_link",
                 use_container_width=True
             )
             qr_guide_path = get_path("code_qr_guide.png")
