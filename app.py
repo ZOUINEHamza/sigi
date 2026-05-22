@@ -591,20 +591,30 @@ with tab_analysis:
     data = st.session_state.get("current_data")
 
     if data:
-        iq_bursts = data.get("iq_bursts", [])
+        # Reconvertir les IQ depuis JSON si nécessaire
+        iq_bursts_raw = data.get("iq_bursts", [])
+        iq_bursts = []
+        for burst in iq_bursts_raw:
+            if len(burst) > 0:
+                if isinstance(burst[0], (list, tuple)):
+                    # Format [[real, imag], ...] depuis JSON
+                    iq_bursts.append(np.array([complex(s[0], s[1]) for s in burst], dtype=np.complex64))
+                else:
+                    # Format direct numpy/list
+                    iq_bursts.append(np.array(burst, dtype=np.complex64))
+
         if not iq_bursts:
-            st.info(" Aucun burst IQ en mémoire. Lancez une identification d'abord.")
+            st.info("💡 Aucun burst IQ en mémoire. Lancez une identification d'abord.")
         else:
             idx = st.session_state.get("selected_burst_idx", 0)
             idx = min(idx, len(iq_bursts) - 1)
 
             st.markdown(f"**Source :** `{data.get('id', 'N/A')}` — Burst **#{idx + 1}** sur {len(iq_bursts)}")
 
-            # Sélecteur de burst
             idx = st.slider("Sélectionner le burst à analyser :", 0, len(iq_bursts) - 1, idx, key="burst_slider_analysis")
             st.session_state.selected_burst_idx = idx
 
-            seg = np.array(iq_bursts[idx], dtype=np.complex64)
+            seg = iq_bursts[idx]
 
             # Paramètres
             params = st.session_state.get("params", {})
@@ -613,7 +623,7 @@ with tab_analysis:
 
             # Calculs signal
             phase_brute = iq_to_phase(seg)
-            phase_purif = phase_brute.copy()  # simplifié (sans EMD complet côté web)
+            phase_purif = phase_brute.copy()
             t_ms = np.arange(len(phase_brute)) / fs * 1000
 
             f_psd, Pxx = welch(seg, fs=fs, nperseg=min(1024, len(seg) // 2), return_onesided=False)
@@ -654,24 +664,26 @@ with tab_analysis:
             st.markdown('<p class="section-label">Variances de phase — AVAR / HVAR / PVAR</p>', unsafe_allow_html=True)
             col_v1, col_v2, col_v3 = st.columns(3)
 
-            for col_var, (fn, title, col_color) in zip(
+            v_avar = compute_avar(phase_purif, taus, fs)
+            v_hvar = compute_avar(phase_purif, taus, fs)  # remplacer par compute_hvar si dispo
+            v_pvar = compute_avar(phase_purif, taus, fs)  # remplacer par compute_pvar si dispo
+
+            for col_var, (v, title, col_color) in zip(
                 [col_v1, col_v2, col_v3],
-                [(compute_avar, "AVAR", PAL['teal']),
-                 (compute_avar, "HVAR", PAL['blue']),   # compute_hvar si dispo
-                 (compute_avar, "PVAR", PAL['amber'])]  # compute_pvar si dispo
+                [(v_avar, "AVAR", PAL['teal']),
+                 (v_hvar, "HVAR", PAL['blue']),
+                 (v_pvar, "PVAR", PAL['amber'])]
             ):
-                v = fn(phase_purif, taus, fs)
                 valid = ~np.isnan(v) & (v > 0)
                 with col_var:
                     fig_v = go.Figure()
                     if valid.sum() > 1:
                         fig_v.add_trace(go.Scatter(
-                            x=taus[valid],
-                            y=np.sqrt(v[valid]),
+                            x=taus[valid].tolist(),
+                            y=np.sqrt(v[valid]).tolist(),
                             mode='lines',
                             line=dict(color=col_color, width=2),
                             fill='tozeroy',
-                            fillcolor=col_color.replace(')', ', 0.1)').replace('rgb', 'rgba') if 'rgb' in col_color else col_color,
                             name=title
                         ))
                     fig_v.update_layout(
@@ -692,7 +704,7 @@ with tab_analysis:
                 st.markdown('<p class="section-label">DSP — Welch</p>', unsafe_allow_html=True)
                 fig_psd = go.Figure()
                 fig_psd.add_trace(go.Scatter(
-                    x=f_shifted, y=P_shifted,
+                    x=f_shifted.tolist(), y=P_shifted.tolist(),
                     line=dict(color=PAL['blue'], width=1.2),
                     name="PSD"
                 ))
@@ -710,7 +722,7 @@ with tab_analysis:
                 st.markdown('<p class="section-label">Fréquence instantanée</p>', unsafe_allow_html=True)
                 fig_fi = go.Figure()
                 fig_fi.add_trace(go.Scatter(
-                    x=t_fi, y=freq_inst,
+                    x=t_fi.tolist(), y=freq_inst.tolist(),
                     line=dict(color=PAL['coral'], width=0.8),
                     opacity=0.8,
                     name="Fréq. inst."
@@ -727,38 +739,44 @@ with tab_analysis:
 
             # ── TABLEAU DES FEATURES ─────────────────────────────────────────
             st.markdown('<p class="section-label">Features extraites du burst</p>', unsafe_allow_html=True)
-            v_avar = compute_avar(phase_purif, taus, fs)
-            valid = ~np.isnan(v_avar) & (v_avar > 0)
+            valid_avar = ~np.isnan(v_avar) & (v_avar > 0)
 
             feat_names = [
-                "AVAR amplitude", "AVAR pente", "HVAR amplitude", "HVAR pente",
-                "Crest Factor", "Kurtosis", "Skewness",
-                "PSD pente basse", "PSD pente haute",
-                "Puissance moyenne", "Entropie de phase",
+                "AVAR amplitude",
+                "AVAR pente",
+                "HVAR amplitude",
+                "Crest Factor",
+                "Kurtosis",
+                "Skewness",
+                "PSD pente basse",
+                "PSD pente haute",
+                "Puissance moyenne",
+                "Entropie de phase",
             ]
             feat_vals = [
-                float(np.mean(np.sqrt(v_avar[valid]))) if valid.sum() > 0 else 0.0,
-                float(np.polyfit(np.log10(taus[valid]), np.log10(np.sqrt(v_avar[valid])), 1)[0]) if valid.sum() > 1 else 0.0,
-                float(np.mean(np.sqrt(v_avar[valid]))) if valid.sum() > 0 else 0.0,
-                0.0,
-                float(np.max(np.abs(seg)) / (np.sqrt(np.mean(np.abs(seg)**2)) + 1e-12)),
+                float(np.mean(np.sqrt(v_avar[valid_avar]))) if valid_avar.sum() > 0 else 0.0,
+                float(np.polyfit(np.log10(taus[valid_avar]), np.log10(np.sqrt(v_avar[valid_avar])), 1)[0]) if valid_avar.sum() > 1 else 0.0,
+                float(np.mean(np.sqrt(v_hvar[valid_avar]))) if valid_avar.sum() > 0 else 0.0,
+                float(np.max(np.abs(seg)) / (np.sqrt(np.mean(np.abs(seg) ** 2)) + 1e-12)),
                 float(kurtosis(np.abs(seg))),
                 float(skew(np.abs(seg))),
-                float(np.mean(P_shifted[:len(P_shifted)//2])),
-                float(np.mean(P_shifted[len(P_shifted)//2:])),
-                float(np.mean(np.abs(seg)**2)),
-                float(-np.sum(np.abs(phase_purif / (np.sum(np.abs(phase_purif)) + 1e-12)) *
-                              np.log(np.abs(phase_purif / (np.sum(np.abs(phase_purif)) + 1e-12)) + 1e-12))),
+                float(np.mean(P_shifted[:len(P_shifted) // 2])),
+                float(np.mean(P_shifted[len(P_shifted) // 2:])),
+                float(np.mean(np.abs(seg) ** 2)),
+                float(-np.sum(
+                    np.abs(phase_purif / (np.sum(np.abs(phase_purif)) + 1e-12)) *
+                    np.log(np.abs(phase_purif / (np.sum(np.abs(phase_purif)) + 1e-12)) + 1e-12)
+                )),
             ]
 
             df_feat = pd.DataFrame({
-                "Feature":  feat_names,
-                "Valeur":   [f"{v:.6f}" for v in feat_vals],
+                "Feature": feat_names,
+                "Valeur":  [f"{v:.6f}" for v in feat_vals],
             })
-            st.dataframe(df_feat, hide_index=True, height=420, width="stretch")
+            st.dataframe(df_feat, hide_index=True, height=420, use_container_width=True)
 
     else:
-        st.info(" Sélectionnez d'abord un rapport dans l'onglet **Identification**.")
+        st.info("💡 Sélectionnez d'abord un rapport dans l'onglet **Identification**.")
 
 with tab_train:
     st.header("Gestion de d'entraînement")
