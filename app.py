@@ -776,25 +776,104 @@ with tab_inc:
 with tab_params:
     st.header("Configuration Avancée")
 
-    # Layout professionnel en colonnes pour les paramètres
     col_p1, col_p2 = st.columns(2)
 
     with col_p1:
+        # ── Acquisition ──────────────────────────────────────────────────
         with st.container(border=True):
-            st.markdown("**📡 Acquisition & Traitement**")
-            st.number_input("Fréquence (Hz)", value=80000, step=1000)
-            st.select_slider("Décimation", options=[1, 2, 4, 8], value=2)
-            st.toggle("Utiliser EMD (Empirical Mode Decomposition)", value=True)
-            st.toggle("Utiliser Wavelet Denoising", value=False)
+            st.markdown('<p class="section-label">Acquisition</p>', unsafe_allow_html=True)
+            fs = st.number_input(
+                "Fréquence d'échantillonnage (Hz)",
+                min_value=10, max_value=100_000_000,
+                value=80_000, step=100_000
+            )
+
+        # ── Décimation ───────────────────────────────────────────────────
+        with st.container(border=True):
+            st.markdown('<p class="section-label">Décimation</p>', unsafe_allow_html=True)
+            decim = st.number_input(
+                "Facteur de décimation",
+                min_value=1, max_value=64,
+                value=2, step=1
+            )
+            fs_eff = fs // decim
+            st.markdown(f"**Fs effective : <span style='color:#1D9E75;font-size:15px'>{fs_eff/1000:.1f} kHz</span>**", unsafe_allow_html=True)
+
+        # ── Détection des Bursts AIS ─────────────────────────────────────
+        with st.container(border=True):
+            st.markdown('<p class="section-label">Détection des Bursts AIS</p>', unsafe_allow_html=True)
+            burst_smooth  = st.number_input("Lissage énergie (ms)",       min_value=0.01, max_value=50.0,    value=1.0,  step=0.1,  format="%.2f")
+            burst_thr     = st.number_input("Seuil détection (dB)",       min_value=0.5,  max_value=60.0,    value=8.0,  step=0.5,  format="%.1f")
+            burst_min     = st.number_input("Durée minimale burst (ms)",  min_value=0.1,  max_value=500.0,   value=10.0, step=0.5,  format="%.1f")
+            burst_merge   = st.number_input("Fusion gaps < (ms)",         min_value=0.01, max_value=100.0,   value=2.0,  step=0.1,  format="%.2f")
+            burst_max     = st.number_input("Bursts max par fichier",     min_value=0,    max_value=5000,    value=200,  step=10)
+            st.caption("0 = tous les bursts")
+
+        # ── Analyse ──────────────────────────────────────────────────────
+        with st.container(border=True):
+            st.markdown('<p class="section-label">Analyse</p>', unsafe_allow_html=True)
+            nseg = st.number_input("Segments log-log (pentes)", min_value=2, max_value=10, value=3, step=1)
 
     with col_p2:
+        # ── EMD + CMSE ───────────────────────────────────────────────────
         with st.container(border=True):
-            st.markdown("** Détection AIS**")
-            st.slider("Seuil de puissance (dB)", 1, 20, 8)
-            st.slider("Durée minimale burst (ms)", 5, 50, 10)
-            st.slider("Seuil Open-Set (GMM)", 0.1, 0.9, 0.6)
+            st.markdown('<p class="section-label">EMD+CMSE — Décomposition Modale Empirique</p>', unsafe_allow_html=True)
+            use_emd  = st.toggle("Activer l'EMD",               value=True)
+            use_cmse = st.toggle("Utiliser CMSE (recommandé)",  value=True)
+            emd_sub  = st.number_input("Sous-échantillonnage (pts)", min_value=100, max_value=200_000, value=5000, step=500)
+            emd_imf  = st.number_input("IMFs max",                   min_value=2,   max_value=30,      value=8,    step=1)
 
-    st.button("💾 Sauvegarder la configuration système")
+        # ── WT — Débruitage par Ondelette ────────────────────────────────
+        with st.container(border=True):
+            st.markdown('<p class="section-label">WT — Débruitage par Ondelette</p>', unsafe_allow_html=True)
+            use_wt  = st.toggle("Activer la WT (désactivé par défaut)", value=False)
+            wt_wav  = st.selectbox("Ondelette", ["db4", "db6", "db8", "sym4", "sym6", "coif2", "haar"], index=0)
+
+        # ── Open Set / GMM ───────────────────────────────────────────────
+        with st.container(border=True):
+            st.markdown('<p class="section-label">Open Set — Seuils GMM</p>', unsafe_allow_html=True)
+            seuil_proba    = st.number_input("Seuil proba classifieur",        min_value=0.01, max_value=0.99, value=0.60, step=0.01, format="%.2f")
+            seuil_cap      = st.number_input("Captures min avant intégration", min_value=1,    max_value=500,  value=10,   step=1)
+            seuil_dist     = st.number_input("Distance max regroupement",      min_value=0.01, max_value=100.0,value=2.0,  step=0.1,  format="%.2f")
+            percentile_gmm = st.number_input("Percentile calibration GMM",     min_value=1,    max_value=50,   value=5,    step=1)
+            k_max_gmm      = st.number_input("K max composantes GMM",          min_value=1,    max_value=20,   value=5,    step=1)
+
+        # ── Chemins fichiers ─────────────────────────────────────────────
+        with st.container(border=True):
+            st.markdown('<p class="section-label">Fichiers du modèle</p>', unsafe_allow_html=True)
+            st.code(
+                f"Modèle      : {MODEL_PATH}\n"
+                f"Métadonnées : {META_PATH}\n"
+                f"GMM         : {GMM_PATH}\n"
+                f"Inconnus    : {INCONNUS_FILE}",
+                language=None
+            )
+
+    st.markdown("---")
+    if st.button(" Sauvegarder la configuration système"):
+        st.session_state["params"] = {
+            "fs_original":        fs,
+            "decim":              decim,
+            "fs":                 fs_eff,
+            "burst_smooth_ms":    burst_smooth,
+            "burst_threshold_db": burst_thr,
+            "burst_min_ms":       burst_min,
+            "burst_merge_gap_ms": burst_merge,
+            "max_bursts":         burst_max if burst_max > 0 else None,
+            "nseg":               nseg,
+            "use_emd":            use_emd,
+            "use_cmse":           use_cmse,
+            "emd_sub":            emd_sub,
+            "emd_imf":            emd_imf,
+            "use_wt":             use_wt,
+            "wt_wav":             wt_wav,
+            "seuil_proba":        seuil_proba,
+            "seuil_cap":          seuil_cap,
+            "seuil_dist":         seuil_dist,
+            "percentile_gmm":     percentile_gmm,
+            "k_max_gmm":          k_max_gmm,
+        }
+        st.success("✅ Configuration sauvegardée pour cette session.")
 
 
 with tab_about:
