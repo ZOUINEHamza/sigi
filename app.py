@@ -887,10 +887,10 @@ with tab_about:
             SigNoise — RF Fingerprinting
         </h2>
         <p style="color:#9FB3D4; margin:6px 0 0 0; font-size:13px;">
-            Projet de Fin d'Études — École Royale Navale / IRENav — Année académique 2025–2026
+            Projet de Fin d'Études — École Royale Navale / École Navale — Année académique 2025–2026
         </p>
         <p style="color:{PAL['gold']}; margin:4px 0 0 0; font-size:12px; font-weight:600;">
-            EV2 Saad EL MAACHI &nbsp;·&nbsp; EV2 Hamza ZOUINE
+            EV2 Hamza ZOUINE &nbsp;·&nbsp; EV2  Saad EL MAACHI
         </p>
     </div>
     """, unsafe_allow_html=True)
@@ -980,31 +980,44 @@ Les hypothèses de travail ont été **validées expérimentalement** :
         with st.container(border=True):
             st.markdown(f'<p class="section-label">Encadrement</p>', unsafe_allow_html=True)
             st.markdown("""
-**Encadrants principaux**
+**Encadrants:**
 - M. Abdel-Ouahab BOUDRAA — Directeur Adjoint IRENav, Professeur École Navale
 - M. Jean-Jacques SZKOLNIK — Ingénieur de Recherche et Innovation, IRENav
 - Mme Assia BAKALI — Enseignante, École Royale Navale
 - Mme Asmaa MAALI — Enseignante, École Royale Navale
 - CF Yahya BENRAMDANE — Chef du Centre Opérationnel de Guerre Électronique, Marine Royale
 
-**Co-encadrante**
+**Co-encadrante :**
 - Mme Fatima EL ABBADI — Enseignante, École Royale Navale
             """)
 
         # --- RAPPORT ---
         with st.container(border=True):
-            st.markdown(f'<p class="section-label">Rapport Complet</p>', unsafe_allow_html=True)
-            st.markdown("""
-Pour plus d'informations sur la méthodologie, les résultats et les bases théoriques :
-            """)
+            st.markdown(f'<p class="section-label">Documents</p>', unsafe_allow_html=True)
+
+            st.markdown("**📄 Rapport de projet**")
+            st.markdown("Méthodologie, résultats et bases théoriques :")
             st.link_button(
-                "📄 Accéder au rapport complet",
-                "https://drive.google.com/file/d/1LwW_DU1MAIXDMeJ6eyOswKefYKBhqLDi/view?usp=drivesdk",
+                "Accéder au rapport complet",
+                "https://drive.google.com/file/d/1fdFobIpf0ZmNxC1mn6wCpf8f6PDm0U69/view?usp=sharing",
                 use_container_width=True
             )
             qr_path = get_path("code_qr_rapport.png")
             if qr_path:
-                st.image(qr_path, caption="Scanner pour accéder au rapport", width=160)
+                st.image(qr_path, caption="QR — Rapport complet", width=140)
+
+            st.markdown("---")
+
+            st.markdown("**📘 Guide d'utilisation SigNoise**")
+            st.markdown("Manuel d'installation, prise en main et fonctionnalités :")
+            st.link_button(
+                "Accéder au guide d'utilisation",
+                "https://drive.google.com/file/d/1fdFobIpf0ZmNxC1mn6wCpf8f6PDm0U69/view?usp=sharing",
+                use_container_width=True
+            )
+            qr_guide_path = get_path("code_qr_guide.png")
+            if qr_guide_path:
+                st.image(qr_guide_path, caption="QR — Guide d'utilisation", width=140)
 
     # --- FOOTER VERSION ---
     st.markdown("---")
