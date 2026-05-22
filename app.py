@@ -579,7 +579,7 @@ with tab_id:
             st.dataframe(df_bursts, width="stretch", height=300)
             
             selected_burst = st.selectbox("Analyser un burst spécifique :", df_bursts["Burst #"])
-            if st.button("🔍 Voir l'analyse détaillée"):
+            if st.button(" Voir l'analyse détaillée"):
                 st.session_state.selected_burst_idx = selected_burst - 1
                 st.success(f"Burst {selected_burst} sélectionné. Allez dans l'onglet 'Analyse Signal'.")
 
@@ -627,7 +627,7 @@ with tab_analysis:
         st.info("💡 Sélectionnez d'abord un rapport dans l'onglet **Identification**.")
 
 with tab_train:
-    st.header("Gestion de l'Intelligence Artificielle")
+    st.header("Gestion de d'entraînement")
     
     # 1. État du modèle actuel (chargé dynamiquement)
     st.markdown('<p class="section-label">Modèle Actuel</p>', unsafe_allow_html=True)
@@ -640,13 +640,12 @@ with tab_train:
     
     st.write(f"**Classes :** {', '.join(classes_list) if classes_list else 'Aucune'}")
 
-
     # 2. Ajout de nouvelles acquisitions pour l'entraînement
     st.markdown('<p class="section-label">Nouvelle Acquisition pour la Base de Données</p>', unsafe_allow_html=True)
     with st.expander("➕ Ajouter un échantillon à la base"):
         new_class = st.text_input("Étiquette de la classe (ex: AIS_TUG_01)")
         new_iq = st.file_uploader("Fichier IQ de référence", type=["iq", "bin"], key="train_iq")
-        if st.button("💾 Enregistrer dans la base d'apprentissage"):
+        if st.button("Enregistrer dans la base d'apprentissage"):
             st.success(f"Échantillon ajouté à la classe '{new_class}'.")
 
     # 3. Bouton de réentraînement
