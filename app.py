@@ -204,11 +204,13 @@ st.markdown(f"""
     
     /* Custom Header */
     .header-box {{
-        background: linear-gradient(90deg, {PAL['marine']} 0%, #2C2C2A 100%);
+        background: {PAL['white']};
         border-radius: 10px;
         padding: 20px;
         margin-bottom: 25px;
-        color: white;
+        color: {PAL['marine']};
+        border: 1px solid {PAL['border']};
+        box-shadow: 0 2px 8px rgba(0,0,0,0.06);
     }}
     
     /* Buttons */
@@ -317,12 +319,12 @@ def get_path(filename):
 st.markdown(f"""
     <div class="header-box">
         <div style="display: flex; justify-content: space-between; align-items: center;">
-            <img src="data:image/png;base64,{st.session_state.get('logo_ern_b64', '')}" width="100" style="filter: brightness(0) invert(1);">
+            <img src="data:image/png;base64,{st.session_state.get('logo_ern_b64', '')}" width="100">
             <div style="text-align: center;">
-                <h1 style="margin: 0; font-size: 28px; letter-spacing: 1px;">SigNoise : RF Fingerprinting Cloud</h1>
-                <p style="margin: 5px 0 0 0; color: #C0BEB4; font-size: 14px;">IDENTIFICATION AIS & ANALYSE DE SIGNATURE DE BRUIT</p>
+                <h1 style="margin: 0; font-size: 28px; letter-spacing: 1px; color: {PAL['marine']};">SigNoise : RF Fingerprinting Cloud</h1>
+                <p style="margin: 5px 0 0 0; color: {PAL['mid']}; font-size: 14px; letter-spacing: 1px;">IDENTIFICATION AIS & ANALYSE DE SIGNATURE DE BRUIT</p>
             </div>
-            <img src="data:image/png;base64,{st.session_state.get('logo_en_b64', '')}" width="100" style="filter: brightness(0) invert(1);">
+            <img src="data:image/png;base64,{st.session_state.get('logo_en_b64', '')}" width="100">
         </div>
     </div>
     """, unsafe_allow_html=True)
