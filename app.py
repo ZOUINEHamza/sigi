@@ -465,7 +465,12 @@ st.markdown(f"""
     /* Tabs Styling */
     .stTabs [data-baseweb="tab-list"] {{
         gap: 2px;
-        background-color: transparent;
+        background-color: {PAL['light']};
+        position: sticky;
+        top: 150px;
+        z-index: 998;
+        padding-top: 10px;
+        border-bottom: 1px solid {PAL['border']};
     }}
     .stTabs [data-baseweb="tab"] {{
         height: 50px;
@@ -500,10 +505,13 @@ st.markdown(f"""
         background: {PAL['white']};
         border-radius: 10px;
         padding: 20px;
-        margin-bottom: 25px;
+        margin-bottom: 0;
         color: {PAL['marine']};
         border: 1px solid {PAL['border']};
         box-shadow: 0 2px 8px rgba(0,0,0,0.06);
+        position: sticky;
+        top: 0;
+        z-index: 999;
     }}
     
     /* Buttons */
@@ -591,6 +599,19 @@ st.markdown(f"""
     /* Icône active en couleur marine */
     .stTabs [aria-selected="true"]::before {{
         filter: invert(10%) sepia(80%) saturate(800%) hue-rotate(200deg) brightness(50%);
+    }}
+    /* Masquer la barre Streamlit native + libérer overflow pour le sticky */
+    header[data-testid="stHeader"] {{ display: none !important; }}
+
+    .main .block-container,
+    [data-testid="stMainBlockContainer"] {{
+        padding-top: 1rem !important;
+    }}
+
+    section[data-testid="stMain"],
+    .main,
+    [data-testid="stAppViewContainer"] {{
+        overflow: visible !important;
     }}
     </style>
     """, unsafe_allow_html=True)
