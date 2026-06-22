@@ -467,7 +467,7 @@ st.markdown(f"""
         gap: 2px;
         background-color: {PAL['light']};
         position: fixed;
-        top: 130px;
+        top: 150px;
         left: 0;
         right: 0;
         z-index: 998;
