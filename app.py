@@ -466,10 +466,12 @@ st.markdown(f"""
     .stTabs [data-baseweb="tab-list"] {{
         gap: 2px;
         background-color: {PAL['light']};
-        position: sticky;
-        top: 150px;
+        position: fixed;
+        top: 130px;
+        left: 0;
+        right: 0;
         z-index: 998;
-        padding-top: 10px;
+        padding: 10px 20px 0 20px;
         border-bottom: 1px solid {PAL['border']};
     }}
     .stTabs [data-baseweb="tab"] {{
@@ -504,14 +506,17 @@ st.markdown(f"""
     .header-box {{
         background: {PAL['white']};
         border-radius: 10px;
-        padding: 20px;
+        padding: 15px 20px;
         margin-bottom: 0;
         color: {PAL['marine']};
         border: 1px solid {PAL['border']};
         box-shadow: 0 2px 8px rgba(0,0,0,0.06);
-        position: sticky;
+        position: fixed;
         top: 0;
+        left: 0;
+        right: 0;
         z-index: 999;
+        border-radius: 0;
     }}
     
     /* Buttons */
@@ -600,18 +605,13 @@ st.markdown(f"""
     .stTabs [aria-selected="true"]::before {{
         filter: invert(10%) sepia(80%) saturate(800%) hue-rotate(200deg) brightness(50%);
     }}
-    /* Masquer la barre Streamlit native + libérer overflow pour le sticky */
+    /* Masquer la barre Streamlit native */
     header[data-testid="stHeader"] {{ display: none !important; }}
 
+    /* Pousser le contenu vers le bas pour qu'il ne soit pas caché par le header fixed */
     .main .block-container,
     [data-testid="stMainBlockContainer"] {{
-        padding-top: 1rem !important;
-    }}
-
-    section[data-testid="stMain"],
-    .main,
-    [data-testid="stAppViewContainer"] {{
-        overflow: visible !important;
+        padding-top: 200px !important;
     }}
     </style>
     """, unsafe_allow_html=True)
